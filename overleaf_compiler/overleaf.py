@@ -28,6 +28,9 @@ def import_zip(zip_path: Path, dest: Path) -> list[Path]:
 def _files(root: Path) -> list[Path]:
     """zip に入れるファイル。git の中なら .gitignore に従う。"""
     try:
+        # 外側のリポジトリが原稿のフォルダごと無視している（data/ など）なら、git の一覧は空になる
+        if subprocess.run(["git", "-C", str(root), "check-ignore", "-q", "."], capture_output=True).returncode == 0:
+            raise FileNotFoundError
         out = subprocess.run(
             ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard", "."],
             capture_output=True, check=True).stdout.decode()
