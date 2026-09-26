@@ -1,0 +1,19 @@
+[project]
+name = "overleaf-compiler"
+version = "0.1.0"
+description = "Overleaf の原稿をローカルで組み、PDF をクリックして LaTeX を直し、Overleaf へ戻す"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+overleaf-compiler = "overleaf_compiler.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["overleaf_compiler*"]
+
+[tool.setuptools.package-data]
+overleaf_compiler = ["static/*.html", "static/pdfjs/*", "static/pdfjs/**/*", "static/codemirror/*", "static/fonts/*", "static/marked/*"]

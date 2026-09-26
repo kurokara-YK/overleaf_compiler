@@ -1,0 +1,1 @@
+Ubuntu Mono（Ubuntu Font Licence）と Noto Sans（SIL OFL 1.1）。npm の @fontsource から latin の woff2 を複写した。Overleaf のエディタ（Ubuntu では Ubuntu Mono になる）と画面（Noto Sans）の字面に合わせるため。

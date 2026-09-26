@@ -1,0 +1,1 @@
+marked 18.0.14（MIT）。.md のプレビューに使う。npm の marked から lib/marked.esm.js を複写した。

@@ -1,0 +1,1 @@
+pdfjs-dist 6.3.289（Mozilla, Apache-2.0）。npm の pdfjs-dist から build/ と cmaps/ standard_fonts/ wasm/ を複写した。

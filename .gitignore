@@ -1,0 +1,46 @@
+# ---- 公開しないもの ----
+# エージェント（Claude Code など）向けの指示書。公開リポジトリには含めない
+AGENTS.md
+CLAUDE.md
+.claude/
+
+# 原稿（ワークスペース）。個人の原稿や未発表の論文が入るので，中身は一切含めない
+/data/*
+!/data/.gitkeep
+
+# ---- LaTeX の中間生成物 ----
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.dvi
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.synctex(busy)
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+*.xdv
+*-SAVE-ERROR
+
+# ---- 作業中のバックアップ・zip ----
+*.bak
+.*.bak/
+/*.zip
+
+# ---- overleaf-compiler ----
+*.overleaf-compiler-tmp
+.overleaf-compiler-serve.json
+
+# ---- Python ----
+__pycache__/
+*.pyc
+*.egg-info/
+/build/
+/dist/

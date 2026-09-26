@@ -1,0 +1,1 @@
+CodeMirror 5.65.21（MIT）。npm の codemirror から lib/ mode/stex mode/markdown addon/selection/active-line を複写した。
