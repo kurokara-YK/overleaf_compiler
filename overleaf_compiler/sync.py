@@ -147,6 +147,28 @@ def _squeeze(text: str) -> tuple[str, list[int]]:
 _SPECIAL = re.compile(r"(?<!\\)([%&#_])")
 
 
+def find_in_text(text: str, line: int, old: str) -> tuple[int, int] | None:
+    """PDF 上の文字列 old が、ソースの文字列 text のどこにあるか（始まりと終わりの位置）。
+
+    空白・改行・全角半角の違いは無視して突き合わせる。同じ文字列が複数あれば、line 行に一番近いもの。
+    見つからなければ None（\\cite や数式など、PDF とソースで文字が違う部分）。
+    """
+    comp, idx = _squeeze(text)
+    here = sum(len(l) for l in text.splitlines(keepends=True)[:max(line - 1, 0)])
+    for variant in (old, re.sub(r"-\s*\n\s*", "", old)):  # 2つ目は行末のハイフネーションを戻したもの
+        q, _ = _squeeze(variant)
+        if not q:
+            return None
+        hits, pos = [], comp.find(q)
+        while pos != -1:
+            hits.append(pos)
+            pos = comp.find(q, pos + 1)
+        if hits:
+            h = min(hits, key=lambda h: abs(idx[h] - here))
+            return idx[h], idx[h + len(q) - 1] + 1
+    return None
+
+
 def replace_in_source(path: Path, line: int, old: str, new: str, root: Path) -> dict:
     """PDF 上で選んだ文字列 old を、ソースの中で探して new に置き換える。
 
@@ -156,20 +178,12 @@ def replace_in_source(path: Path, line: int, old: str, new: str, root: Path) -> 
     path = inside(path, root)
     cur = read_file(path, root)
     text = cur["text"]
-    comp, idx = _squeeze(text)
-    here = sum(len(l) for l in text.splitlines(keepends=True)[:max(line - 1, 0)])
-    for variant in (old, re.sub(r"-\s*\n\s*", "", old)):  # 2つ目は行末のハイフネーションを戻したもの
-        q, _ = _squeeze(variant)
-        if not q:
-            raise SyncError("選んだ文字が空")
-        hits, pos = [], comp.find(q)
-        while pos != -1:
-            hits.append(pos)
-            pos = comp.find(q, pos + 1)
-        if hits:
-            h = min(hits, key=lambda h: abs(idx[h] - here))
-            s, e = idx[h], idx[h + len(q) - 1] + 1
-            new_src = _SPECIAL.sub(r"\\\1", new)
-            r = write_file(path, text[:s] + new_src + text[e:], cur["mtime"], root)
-            return {"line": text.count("\n", 0, s) + 1, "mtime": r["mtime"]}
-    raise SyncError("NOT_FOUND")
+    if not _squeeze(old)[0]:
+        raise SyncError("選んだ文字が空")
+    span = find_in_text(text, line, old)
+    if not span:
+        raise SyncError("NOT_FOUND")
+    s, e = span
+    new_src = _SPECIAL.sub(r"\\\1", new)
+    r = write_file(path, text[:s] + new_src + text[e:], cur["mtime"], root)
+    return {"line": text.count("\n", 0, s) + 1, "mtime": r["mtime"]}

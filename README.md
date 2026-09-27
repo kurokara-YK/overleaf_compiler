@@ -37,6 +37,8 @@ Overleaf へ戻す zip を作る**ところまでを受け持ちます．
 - **保存するとすぐ PDF が変わる**：保存から PDF の更新まで 1〜2 秒ほど（6 ページの和文原稿の例）
 - **ローカルのエディタと同時に使える**：VS Code などでファイルを直すと，ブラウザの画面にも約 1 秒で反映されます
 - **PDF と行き来できる**：PDF をダブルクリックするとソースの該当行へ移り，PDF の文字を選んでその場で書き換えることもできます
+- **PDF にコメントを付ける**：Acrobat のように PDF の文字を選んでコメントを付け，コメント付きの PDF で落とせます．
+  Acrobat でもらったコメント付きの PDF も取り込め，Claude Code に「コメントを直して」と頼めばローカルで直せます
 - **変更履歴**：ファイルの前の版を残し，差分を見て戻せます．消したファイルも戻せます
 - **Overleaf へ戻す**：Overleaf の「Upload Project」にそのまま入れられる zip を作ります
 
@@ -57,7 +59,7 @@ Overleaf とのやり取りは，**人が手で行う「ダウンロード」と
 │📁│ ファイル  📄＋ 📁＋ ⤒  │ main.tex | 01_intro.tex        │→│ [リコンパイル] ログ ⤓   1/6  − ＋ 幅に合わせる │
 │🔍│ ▾ 📂 chapter            │  1 \documentclass{...}          │←│                                                │
 │🕘│   │ 📄 01_intro.tex  ⋮  │  …                              │ │                      PDF                       │
-│  │ ▾ アウトライン           │                                 │ │                                                │
+│💬│ ▾ アウトライン           │                                 │ │                                                │
 └──┴─────────────────────────┴─────────────────────────────────┴─┴────────────────────────────────────────────────┘
 ```
 
@@ -67,6 +69,7 @@ Overleaf とのやり取りは，**人が手で行う「ダウンロード」と
 | 📁 ファイル | ファイルツリー．各ファイルの **⋮** で名前の変更・ダウンロード・削除．下に `\section` などのアウトライン |
 | 🔍 検索 | 原稿の全ファイルを検索（大文字小文字の区別・正規表現・単語単位） |
 | 🕘 変更履歴 | ファイルの前の版と差分．「この版に戻す」「この変更の前に戻す」 |
+| 💬 コメント | PDF に付けたコメントの一覧（未解決の数を表示）．返信・解決・編集・削除，コメント付き PDF の取り込みと書き出し |
 | エディタ | 行番号と色分けの付いたエディタ．入力は自動で保存．`.md` は **Ctrl+Shift+V** で整えた表示に切り替え |
 | PDF | リコンパイル・ログ（エラー数）・ダウンロード・ページ番号・拡大縮小．文字の選択とコピー |
 
@@ -155,6 +158,7 @@ data  →  学会2026  →  論文A（原稿）
 | 境目の **→** | カーソルのある行を PDF 上で示す |
 | 境目の **←** | PDF で選んだ文字（無ければ画面の中央）のソースへ移る |
 | PDF の文字を選んで **✎ ここで直す** | その場で書き換えると，`.tex` の同じ文字が置き換わる（Overleaf には無い操作） |
+| PDF の文字を選んで **💬 コメント** | その文字にコメントを付ける（次の節） |
 | **リコンパイル**（Ctrl+Enter） | 最初から全部組み直す |
 | **ログ** | エラーの一覧．行を押すとその箇所が開く |
 
@@ -170,7 +174,48 @@ data  →  学会2026  →  論文A（原稿）
 両方で同じファイルを同時に直した場合は，どちらかを勝手に捨てず，
 「外の内容を読み込む／こちらで上書き」を選ぶ表示が出ます．
 
-### 4. 変更履歴を見る
+### 4. コメントを付ける（Acrobat と同じ）
+
+PDF の文字を選んで **💬 コメント** を押すと，Acrobat の注釈のようにコメントを付けられます．
+
+| 種類 | PDF 上の表示 | 使いどころ |
+| --- | --- | --- |
+| コメント | 黄色のハイライト | 指摘・質問 |
+| 削除の提案 | 赤の取り消し線 | この文字を消す |
+| 置換の提案 | 赤の取り消し線と，置き換える文字 | この文字をこう直す |
+
+- 左端の 💬 に一覧が出ます（数字は未解決の件数）．押すと PDF のその場所へ移り，**返信・✓ 解決・編集・削除**ができます．
+  カードの `ファイル:行` を押すと，ソースのその行が開きます
+- PDF 上のハイライトを押すと，一覧でそのコメントが開きます．エディタでも，コメントの付いた文字に印が付きます
+- 名前は初回に聞かれ，ブラウザに覚えます（一覧の下の「変更」で変えられます）
+
+**コメントは PDF の位置ではなく，ソースの文字に付きます．** 本文を直して行の折り返しが変わっても，コメントは同じ文字に付いていきます．
+コメントした文字そのものを直すと，カードに「対象の文字がソースに無い（直された可能性がある）」と出ます．
+
+**コメント付きでダウンロードする．** **ファイル → ダウンロード** か一覧の ⤓ から選べます．
+
+| 形式 | 中身 |
+| --- | --- |
+| PDF（コメント付き） | 今の PDF にコメントを PDF の注釈として書き込んだもの．Acrobat・ブラウザ・プレビューなどでコメントとして見えます．返信と解決の状態も入ります |
+| コメント一覧 (.md) | コメントを `ファイル:行` 付きで並べたもの．AI や人にそのまま渡せます |
+
+**Acrobat などでもらったコメントを取り込む．** 一覧の ⤒ を押すか，一覧へコメント付きの PDF をドロップします．
+ハイライト・下線・取り消し線・テキストの置換と挿入・付箋・返信・完了の状態を取り込み，ソースの場所に結びつけます．
+同じ PDF を2回入れても，同じコメントは増えません．
+
+**Claude Code に直してもらう．** 画面を開いたままで，Claude Code に「コメントを直して」と頼めます
+（一覧の下の **🤖 AI への依頼文をコピー** で依頼文を作れます）．Claude Code は次のように直します．
+
+```bash
+overleaf-compiler comments data/学会2026/論文A/main.tex          # 未解決のコメントを ファイル:行 付きで出す
+overleaf-compiler check    data/学会2026/論文A/main.tex          # 直したら組んで確かめる
+overleaf-compiler comments data/学会2026/論文A/main.tex --resolve 3f9a2c -m "例を1つ足した"   # 解決済みにして返信を残す
+```
+
+解決や返信はすぐに画面の一覧へ出ます．コメントは原稿のフォルダの隠しファイル（`.<主文書の名前>.comments.json`）に残ります．
+隠しファイルなので，Overleaf へ戻す zip には入りません．
+
+### 5. 変更履歴を見る
 
 左端の 🕘 に，いつ・どのファイルを・何行変えたかが並びます．押すと差分（緑が足した行，赤が消した行）が出ます．
 
@@ -179,7 +224,7 @@ data  →  学会2026  →  論文A（原稿）
 - **削除したファイルも履歴に残る**ので，選んで「この版に戻す」で戻せます
 - 履歴は原稿のフォルダの外（`~/.local/share/overleaf-compiler/history/`）に置くので，原稿のフォルダは汚れません
 
-### 5. Overleaf へ戻す
+### 6. Overleaf へ戻す
 
 **ファイル → ダウンロード → ソース (.zip)** で，Overleaf にそのまま入れられる zip が落ちます．
 
@@ -250,10 +295,12 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 | --- | --- |
 | `overleaf-compiler [場所]` | ブラウザで開く |
 | `overleaf-compiler import <zip> [展開先]` | Overleaf の zip を展開する．展開先の既定は `data/<zip の名前>` |
-| `overleaf-compiler check <原稿> [--json]` | 組んで，エラー・未定義の参照・はみ出しを `ファイル:行` で出す．失敗なら終了コード 1 |
+| `overleaf-compiler check <原稿> [--json]` | 組んで，エラー・未定義の参照・はみ出しを `ファイル:行` で出す．失敗なら終了コード 1．画面が組んでいる原稿なら，直したファイルを画面が組み終えるのを待って，その結果を出す |
+| `overleaf-compiler comments <原稿> [--all] [--json]` | PDF に付いた未解決のコメントを `ファイル:行` で出す（`--all` で解決済みも） |
+| `overleaf-compiler comments <原稿> --resolve ID … [-m 返信]` | コメントを解決済みにする．`-m` で何をどう直したかを返信に残す．`--reply ID -m …` は返信だけ，`--reopen ID` は未解決に戻す |
 | `overleaf-compiler export <原稿> [-o 出力.zip]` | Overleaf に入れる zip を作る |
-| `overleaf-compiler build <原稿>` | 1回だけ組む（latexmk の出力をそのまま出す） |
-| `overleaf-compiler clean <原稿>` | 中間生成物を消す |
+| `overleaf-compiler build <原稿>` | 1回だけ組む（latexmk の出力をそのまま出す）．画面が組んでいる原稿では断る |
+| `overleaf-compiler clean <原稿>` | 中間生成物を消す．画面が組んでいる原稿では断る |
 
 `<原稿>` は主文書の `.tex` か，それを含むフォルダです．`--data <フォルダ>` で `data/` 以外の置き場を使えます．
 
@@ -271,17 +318,23 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 | `install.sh` | 初回のセットアップ．TeX Live・追加のパッケージ・pandoc・コマンドを入れます |
 | `overleaf_compiler.sh` | 起動スクリプト．`~/.local/bin/overleaf-compiler` はここへのリンクです |
 | `pyproject.toml` | pip / pipx で入れる場合の定義（入れなくても動きます） |
-| `overleaf_compiler/cli.py` | コマンド（serve / check / import / export / build / clean） |
-| `overleaf_compiler/server.py` | ローカルのサーバ．127.0.0.1 でしか待ち受けません |
+| `overleaf_compiler/cli.py` | コマンド（serve / check / comments / import / export / build / clean） |
+| `overleaf_compiler/server.py` | ローカルのサーバ（HTTP の受け口と起動）．127.0.0.1 でしか待ち受けません |
+| `overleaf_compiler/app.py` | サーバの本体．開いている原稿を持ち，画面の要求（読み書き・ファイル操作・検索・履歴・コメント）を処理する |
+| `overleaf_compiler/pandoc.py` | Word・Markdown・HTML への書き出し（pandoc） |
 | `overleaf_compiler/builder.py` | 組版．保存のたびの速い組版と，latexmk による全体の組版 |
 | `overleaf_compiler/project.py` | 主文書の特定，エンジンの推定，フォルダの一覧，ファイルツリー |
 | `overleaf_compiler/sync.py` | ファイルの読み書き，SyncTeX による PDF とソースの対応，PDF 上での書き換え |
 | `overleaf_compiler/history.py` | 変更履歴 |
+| `overleaf_compiler/comments.py` | PDF に付けるコメント（ソースの文字との対応，一覧の出力） |
 | `overleaf_compiler/search.py` | 原稿の全ファイルの検索 |
 | `overleaf_compiler/report.py` | ログから直すべき箇所を拾う（`check` で使う） |
 | `overleaf_compiler/overleaf.py` | zip の展開と，Overleaf へ戻す zip の作成 |
-| `overleaf_compiler/static/index.html` | 画面 |
+| `overleaf_compiler/static/index.html` | 画面の骨組み（HTML） |
+| `overleaf_compiler/static/css/` | 画面の見た目（土台・編集画面・コメント） |
+| `overleaf_compiler/static/js/` | 画面の動き．役割ごとのモジュールに分けている（入口は `main.mjs`．コメントは `comments/`） |
 | `overleaf_compiler/static/pdfjs/` | pdf.js（同梱） |
+| `overleaf_compiler/static/pdflib/` | pdf-lib（同梱）．コメント付き PDF の書き出しに使う |
 | `overleaf_compiler/static/codemirror/` | CodeMirror 5（同梱） |
 | `overleaf_compiler/static/marked/` | marked（同梱） |
 | `overleaf_compiler/static/fonts/` | Ubuntu Mono・Noto Sans（同梱） |
@@ -358,6 +411,7 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 | 部品 | ライセンス | 場所 |
 | --- | --- | --- |
 | PDF.js | Apache-2.0 | `overleaf_compiler/static/pdfjs/` |
+| pdf-lib | MIT | `overleaf_compiler/static/pdflib/` |
 | CodeMirror 5 | MIT | `overleaf_compiler/static/codemirror/` |
 | marked | MIT | `overleaf_compiler/static/marked/` |
 | Ubuntu Mono | Ubuntu Font Licence 1.0 | `overleaf_compiler/static/fonts/` |

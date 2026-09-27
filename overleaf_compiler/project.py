@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 # Overleaf へ出す zip に入れないもの（中間生成物・バックアップ・zip）
@@ -106,14 +105,13 @@ def latexmk_args(tex: Path) -> list[str]:
     return {"lualatex": ["-lualatex"], "xelatex": ["-xelatex"]}.get(eng, ["-pdf"])
 
 
-def edit_root(tex: Path) -> Path:
-    """ブラウザから書き換えてよい範囲。git の中ならリポジトリ全体、そうでなければ主文書のディレクトリ。"""
-    try:
-        out = subprocess.run(["git", "-C", str(tex.parent), "rev-parse", "--show-toplevel"],
-                             capture_output=True, text=True, check=True).stdout.strip()
-        return Path(out).resolve()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return tex.parent
+def edit_root(tex: Path, data: Path) -> Path:
+    """書き換えてよい範囲。data の中の原稿なら data の1段目のフォルダ（\\input{../共通/…} のような
+    原稿の外のファイルも直せるように）、data の外なら原稿のフォルダ。"""
+    tex, data = tex.resolve(), data.resolve()
+    if tex.is_relative_to(data):
+        return data / tex.relative_to(data).parts[0]
+    return tex.parent
 
 
 # ---------------------------------------------------------------- ワークスペースの中の原稿の一覧

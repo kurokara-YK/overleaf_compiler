@@ -7,6 +7,9 @@ CLAUDE.local.md
 /data/*
 !/data/.gitkeep
 
+# 要旨の学習用資料（過去の要旨・添削コメント付き PDF）。他人の氏名・原稿が入るので含めない
+/要旨学習/
+
 # ---- LaTeX の中間生成物 ----
 *.aux
 *.bbl

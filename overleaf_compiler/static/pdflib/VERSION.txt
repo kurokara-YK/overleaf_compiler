@@ -1,0 +1,1 @@
+pdf-lib 1.17.1（Andrew Dillon, MIT）。npm の pdf-lib から dist/pdf-lib.esm.min.js を複写した（sourceMappingURL の行だけ除いた）。PDF にコメント（注釈）を書き込むのに使う。

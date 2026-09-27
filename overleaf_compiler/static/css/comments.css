@@ -1,0 +1,65 @@
+/* コメント（PDF に付ける。Acrobat の注釈に当たる）：PDF とエディタの印・一覧のカード・付ける窓 */
+#rail button { position: relative; }
+.rbadge { position: absolute; right: 0; top: 0; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+  background: var(--err); color: #fff; font-size: 10px; line-height: 15px; font-weight: 700; }
+.rbadge:empty { display: none; }
+.cmark { position: absolute; pointer-events: none; z-index: 2; border-radius: 1px; }
+.cmark.k-highlight { background: rgba(255, 212, 0, .5); mix-blend-mode: multiply; }
+.cmark.k-strike::after, .cmark.k-replace::after { content: ""; position: absolute; left: 0; right: 0; top: 52%;
+  border-top: 1.6px solid #e5383b; }
+.cmark.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cmark.k-highlight.on { background: rgba(255, 170, 0, .6); }
+.cpin { position: absolute; z-index: 3; pointer-events: none; width: 18px; height: 18px; border-radius: 4px 4px 4px 0;
+  background: #ffd400; color: #222; font-size: 11px; line-height: 18px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.cpin.k-insert { background: #3b82f6; color: #fff; border-radius: 3px; font-weight: 700; }
+.cpin.on { outline: 2px solid var(--accent); }
+.cm-cmt { background: rgba(255, 212, 0, .16); border-bottom: 2px solid rgba(255, 212, 0, .55); }
+.cm-cmt.on { background: rgba(255, 212, 0, .32); }
+.cfilter { padding: 0 10px 6px; display: flex; gap: 4px; align-items: center; }
+.cfilter button { font-size: 12px; padding: 1px 8px; }
+#cmtList { flex: 1; overflow: auto; padding: 2px 8px 10px; }
+#cmtList.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
+#cmtList .empty { padding: 10px 4px; line-height: 1.7; }
+.ccard { background: var(--panel); border-radius: 8px; border-left: 3px solid #f0b232; padding: 8px 10px; margin-bottom: 8px;
+  font-size: 13px; cursor: pointer; }
+.ccard:hover { background: #3d3f45; }
+.ccard.k-strike, .ccard.k-replace { border-left-color: #e5383b; } .ccard.k-insert { border-left-color: #3b82f6; }
+.ccard.on { box-shadow: 0 0 0 2px var(--accent); }
+.ccard.resolved { border-left-color: var(--ok); opacity: .7; }
+.ccard .c1 { display: flex; align-items: center; gap: 6px; }
+.ccard .av { width: 22px; height: 22px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; font-weight: 700; }
+.ccard .who { font-weight: 600; color: var(--bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccard .c1 .when { margin-left: auto; font-size: 11px; }
+.ccard .kind { display: inline-block; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 5px; margin-top: 4px; }
+.ccard .cq { margin: 5px 0 3px; padding: 1px 8px; border-left: 2px solid #5c5f66; color: var(--muted); font-size: 12.5px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ccard.k-strike .cq span, .ccard.k-replace .cq span { text-decoration: line-through; text-decoration-color: #e5383b; }
+.ccard .sug { margin: 2px 0 4px; color: #8ea1ff; }
+.ccard .ct { white-space: pre-wrap; word-break: break-word; color: var(--fg); margin-top: 3px; }
+.ccard .warn { font-size: 11.5px; color: var(--warn); margin-top: 4px; }
+.ccard .rp { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.ccard .rp b { color: var(--bright); font-weight: 600; margin-right: 6px; }
+.ccard .rp .when { font-size: 11px; margin-left: 4px; }
+.ccard .rp .t { white-space: pre-wrap; word-break: break-word; }
+.ccard .loc { font-size: 11.5px; color: var(--hint); margin-top: 5px; }
+.ccard .loc a { color: #8ea1ff; cursor: pointer; } .ccard .loc a:hover { text-decoration: underline; }
+.ccard .cacts { display: none; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
+.ccard.on .cacts { display: flex; }
+.ccard .cacts button { font-size: 12px; padding: 1px 8px; }
+.ccard .rbox { display: flex; flex-direction: column; gap: 5px; margin-top: 7px; }
+.ccard .rbox .r { display: flex; justify-content: flex-end; gap: 5px; }
+.ccard textarea, #cbox textarea { font: 13px/1.55 inherit; font-family: inherit; resize: vertical; min-height: 3.2em; padding: 5px 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--bright); }
+.cfoot { padding: 6px 10px 8px; border-top: 1px solid var(--deep); display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+.cfoot .me { display: flex; align-items: center; gap: 6px; } .cfoot .me b { color: var(--bright); }
+.cfoot .me button { font-size: 11.5px; padding: 0 6px; }
+#cAi { justify-content: center; }
+#cbox { position: fixed; display: none; flex-direction: column; gap: 6px; padding: 8px; width: 400px; max-width: calc(100vw - 24px);
+  background: var(--deep); border: 2px solid #f0b232; border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.5); z-index: 51; }
+#cbox.open { display: flex; }
+#cbox .kinds { display: flex; gap: 4px; } #cbox .kinds button { font-size: 12px; padding: 2px 9px; }
+#cbox .q { font-size: 12px; color: var(--muted); border-left: 2px solid #5c5f66; padding: 0 8px; max-height: 3.2em; overflow: hidden; }
+#cbox .r { display: flex; align-items: center; gap: 6px; } #cbox .r .kbd { flex: 1; }
+#cSuggest { width: 100%; }

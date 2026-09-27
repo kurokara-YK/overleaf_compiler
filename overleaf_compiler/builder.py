@@ -85,6 +85,8 @@ class Watcher:
         self.mode = ""            # 直近の組版のしかた（画面の表示用）
         self.seconds = 0.0        # 直近の組版にかかった時間
         self._lock = threading.Lock()
+        self._rounds = 0                     # 変更を見に行った周回の数（settle が待つ）
+        self._round_done = threading.Condition()
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._proc: subprocess.Popen | None = None
@@ -116,6 +118,19 @@ class Watcher:
         """ブラウザで保存した。更新の確認を待たずに組み始める。"""
         self._wake.set()
 
+    def settle(self, timeout: float = 600) -> dict:
+        """呼んだ時点までの変更を組み終えるまで待ち、状態を返す（check が組版の結果を読むため）。
+
+        周回の途中で呼ばれると、その周回は呼ぶ前の更新時刻で変更を判定しているかもしれない。
+        そこで、呼んだあとに始まった周回が終わるまで（今の周回＋1周）待つ。
+        """
+        with self._round_done:
+            target = self._rounds + 2
+        self.poke()
+        with self._round_done:
+            self._round_done.wait_for(lambda: self._rounds >= target or self._stop.is_set(), timeout)
+        return self.status()
+
     def status(self) -> dict:
         with self._lock:
             return {"version": self.version, "building": self.building, "ok": self.ok,
@@ -124,27 +139,37 @@ class Watcher:
 
     # ---- 常駐の本体 ----
     def _loop(self) -> None:
-        started = time.time_ns()
-        self._full(force=True)
-        snap = self._snapshot()
-        while not self._stop.is_set():
-            self._wake.wait(0.25)
-            self._wake.clear()
-            if self._stop.is_set():
-                break
-            now = self._snapshot()
-            # 変わったファイル。組版で読み込むファイルが増えただけ（組版を始める前から有ったもの）は数えない
-            changed = [k for k, m in now.items()
-                       if (k in snap and m != snap[k]) or (k not in snap and (m or 0) > started)]
-            snap = now  # 組んでいる間の変更は、次の周回で拾う
-            if changed:
-                started = time.time_ns()
-                if self.on_change:
-                    try:
-                        self.on_change([Path(k) for k in changed])
-                    except Exception:  # 履歴に残せなくても組版は続ける
-                        pass
-                self._incremental()
+        try:
+            started = time.time_ns()
+            self._full(force=True)
+            snap = self._snapshot()
+            while not self._stop.is_set():
+                self._wake.wait(0.25)
+                self._wake.clear()
+                if self._stop.is_set():
+                    break
+                now = self._snapshot()
+                # 変わったファイル。組版で読み込むファイルが増えただけ（組版を始める前から有ったもの）は数えない
+                changed = [k for k, m in now.items()
+                           if (k in snap and m != snap[k]) or (k not in snap and (m or 0) > started)]
+                snap = now  # 組んでいる間の変更は、次の周回で拾う
+                if changed:
+                    started = time.time_ns()
+                    self._record(changed)
+                    self._incremental()
+                with self._round_done:
+                    self._rounds += 1
+                    self._round_done.notify_all()
+        finally:
+            with self._round_done:   # 止めたときに、待っている settle を起こす
+                self._round_done.notify_all()
+
+    def _record(self, changed: list[str]) -> None:
+        if self.on_change:
+            try:
+                self.on_change([Path(k) for k in changed])
+            except Exception:  # 履歴に残せなくても組版は続ける
+                pass
 
     def _run(self, cmd: list[str], env: dict | None = None) -> tuple[int, str]:
         if self._stop.is_set():

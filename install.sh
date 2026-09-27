@@ -7,7 +7,7 @@
 #   4. overleaf-compiler コマンドを ~/.local/bin に作る
 #   5. ~/.bashrc に TeX Live の PATH を足す（既にあれば飛ばす）
 #
-# 画面で使うもの（pdf.js・CodeMirror・marked・フォント）はプログラムに同梱してあるので、入れる必要は無い。
+# 画面で使うもの（pdf.js・pdf-lib・CodeMirror・marked・フォント）はプログラムに同梱してあるので、入れる必要は無い。
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 HERE="$PWD"
