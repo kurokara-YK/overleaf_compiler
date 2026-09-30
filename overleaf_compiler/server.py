@@ -1,6 +1,7 @@
 """ローカルのブラウザで原稿を選び、Overleaf と同じ画面で直すためのサーバ（HTTP の受け口と起動）。
 
-127.0.0.1 でしか待ち受けない。要求の中身は app.App が処理する。
+127.0.0.1 でしか待ち受けない。要求の中身は app.App が処理する。原稿ごとの要求には ?p=（data からの
+主文書の相対パス）が付き、その原稿の app.Project が処理する。ブラウザのタブごとに別の原稿を開ける。
 """
 from __future__ import annotations
 
@@ -16,6 +17,8 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from . import sync
 from .app import App
+from . import claude, launcher
+from .claude import ClaudeError
 from .project import ProjectError
 
 STATIC = Path(__file__).parent / "static"
@@ -37,7 +40,10 @@ def make_handler(app: App):
             for k, v in (extra or {}).items():
                 self.send_header(k, v)
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):   # 待っている間にタブが閉じられた（チャット欄の長いポーリングなど）
+                pass
 
         def _json(self, obj, code: int = 200):
             self._send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
@@ -45,7 +51,7 @@ def make_handler(app: App):
         def _api(self, fn, arg=None):
             try:
                 self._json(fn(arg))
-            except (sync.SyncError, ProjectError) as e:
+            except (sync.SyncError, ProjectError, ClaudeError) as e:
                 self._json({"error": str(e)}, HTTPStatus.CONFLICT)
             except (KeyError, ValueError) as e:
                 self._json({"error": f"不正な要求: {e}"}, HTTPStatus.BAD_REQUEST)
@@ -66,7 +72,10 @@ def make_handler(app: App):
             if u.path == "/":
                 return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
             if u.path == "/pdf":
-                pdf = app.tex.with_suffix(".pdf") if app.tex else None
+                try:
+                    pdf = app.project(q).tex.with_suffix(".pdf")
+                except (sync.SyncError, ProjectError):
+                    pdf = None
                 if not pdf or not pdf.exists():
                     return self._json({"error": "PDF がまだ無い"}, 404)
                 extra = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(pdf.name)}"} \
@@ -74,21 +83,36 @@ def make_handler(app: App):
                 return self._send(200, pdf.read_bytes(), "application/pdf", extra=extra)
             if u.path == "/raw":
                 try:
-                    data, ctype = app.raw(q.get("path", ""))
+                    data, ctype = app.project(q).raw(q.get("path", ""))
                 except (sync.SyncError, ProjectError) as e:
                     return self._json({"error": str(e)}, 409)
                 extra = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(Path(q['path']).name)}"} \
                     if q.get("download") else None
                 return self._send(200, data, ctype, extra=extra)
             if u.path == "/export":
-                return self._file(lambda: app.export(q.get("format", "zip")))
-            routes = {"/api/info": app.info, "/api/status": app.status, "/api/browse": app.browse,
-                      "/api/tree": app.tree, "/api/read": app.read, "/api/search": app.search,
-                      "/api/goto_source": app.goto_source, "/api/goto_pdf": app.goto_pdf,
-                      "/api/wordcount": app.wordcount, "/api/history": app.history_list,
-                      "/api/history_diff": app.history_diff, "/api/comments": app.comments_list}
+                return self._file(lambda: app.project(q).export(q.get("format", "zip")))
+            routes = {"/api/info": app.info, "/api/status": app.status, "/api/browse": app.browse}
             if u.path in routes:
                 return self._api(routes[u.path], q)
+            # 原稿ごとの要求（?p= の原稿の Project が処理する）
+            per = {"/api/tree": "tree", "/api/read": "read", "/api/search": "search",
+                   "/api/goto_source": "goto_source", "/api/goto_pdf": "goto_pdf",
+                   "/api/wordcount": "wordcount", "/api/history": "history_list",
+                   "/api/history_diff": "history_diff", "/api/history_view": "history_view",
+                   "/api/comments": "comments_list"}
+            if u.path in per:
+                return self._api(lambda arg: getattr(app.project(q), per[u.path])(arg), q)
+            # 右のチャット欄。/api/claude/… は Claude Code、/api/codex/… は Codex
+            for eng, attr in (("claude", "chat"), ("codex", "codex")):
+                if u.path == f"/api/{eng}/events":   # 新しい出来事が出るまで待って返す
+                    return self._api(lambda _: getattr(app.project(q), attr).wait_events(q))
+                if u.path == f"/api/{eng}/sessions":
+                    return self._api(lambda _: getattr(app.project(q), attr).sessions())
+            if u.path.startswith("/claude-asset/"):   # チャット欄のアイコン。VS Code の拡張に入っているものを使う（同梱しない）
+                f = claude.asset(u.path[len("/claude-asset/"):])
+                if f:
+                    return self._send(200, f.read_bytes(), "image/svg+xml", cache=True)
+                return self._send(404, b"not found", "text/plain")
             if u.path.startswith("/static/"):
                 f = (STATIC / u.path[len("/static/"):]).resolve()
                 if f.is_file() and STATIC.resolve() in f.parents:
@@ -104,20 +128,38 @@ def make_handler(app: App):
                 return self._api(lambda _: app.import_(q.get("path", ""), q.get("name", "overleaf.zip"), data))
             if u.path == "/api/upload":
                 data = self._body()
-                return self._api(lambda _: app.upload(q, data))
+                return self._api(lambda _: app.project(q).upload(q, data))
             try:
                 body = json.loads(self._body() or b"{}")
             except json.JSONDecodeError:
                 return self._json({"error": "JSON が壊れている"}, 400)
-            routes = {"/api/write": app.write, "/api/recompile": app.recompile, "/api/rename_txt": app.rename_txt,
-                      "/api/close": app.close_tex, "/api/mkdir": app.mkdir, "/api/newfile": app.newfile,
-                      "/api/newfolder": app.newfolder, "/api/rename": app.rename_file, "/api/delete": app.delete,
-                      "/api/replace": app.replace, "/api/history_restore": app.history_restore,
-                      "/api/comment": app.comment, "/api/settle": app.settle}
-            if u.path == "/api/open":
-                return self._api(lambda b: (app.open(app._data_path(b["tex"])), app.info())[1], body)
+            if u.path == "/api/close":
+                return self._api(app.close_tex, q)
+            if u.path == "/api/rename_project":
+                return self._api(lambda b: app.rename_project(q, b), body)
+            routes = {"/api/open": app.open_api, "/api/rename_txt": app.rename_txt, "/api/mkdir": app.mkdir,
+                      "/api/settle": app.settle}
             if u.path in routes:
                 return self._api(routes[u.path], body)
+            # 原稿ごとの要求（?p= の原稿の Project が処理する）
+            per = {"/api/write": "write", "/api/recompile": "recompile", "/api/newfile": "newfile",
+                   "/api/newfolder": "newfolder", "/api/rename": "rename_file", "/api/delete": "delete",
+                   "/api/replace": "replace", "/api/history_restore": "history_restore", "/api/comment": "comment",
+                   "/api/history_label": "history_label", "/api/copy": "copy_project"}
+            if u.path in per:
+                return self._api(lambda arg: getattr(app.project(q), per[u.path])(arg), body)
+            # 右のチャット欄（claude.Chat）。/api/claude/<名前> を同じ名前のメソッドへ
+            chat = {"send", "stop", "reset", "start", "set", "permission", "control", "resume", "rewind", "terminal",
+                    "compact", "fork"}
+            for eng, attr in (("claude", "chat"), ("codex", "codex")):
+                name = u.path[len(f"/api/{eng}/"):]
+                if u.path.startswith(f"/api/{eng}/") and name in chat:
+                    def call(arg, attr=attr, name=name):
+                        fn = getattr(getattr(app.project(q), attr), name, None)
+                        if fn is None:
+                            raise ClaudeError(f"{eng} では {name} は使えない")
+                        return fn(arg)
+                    return self._api(call, body)
             self._send(404, b"not found", "text/plain")
 
     return Handler
@@ -135,12 +177,14 @@ def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: boo
     if httpd is None:
         raise SystemExit(f"ポート {port}〜{port + 19} が全部使用中")
     app.port = httpd.server_port
+    launcher.write_server(httpd.server_port, data)   # アプリの一覧から開くとき、動いているサーバを使う
+    url = f"http://127.0.0.1:{httpd.server_port}/"
     if tex:
-        app.open(tex)
+        pr = app.open(tex)
+        url += "?p=" + quote(pr.info(app.start)["rel"])
     # kill（SIGTERM）で止められても latexmk を残さない
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))
-    url = f"http://127.0.0.1:{httpd.server_port}/"
-    print(f"overleaf-compiler: {url}   （Ctrl+C で終了）")
+    print(f"overleaf-compiler: http://127.0.0.1:{httpd.server_port}/   （Ctrl+C で終了）")
     if tex:
         print(f"        原稿 {tex.name}")
     if open_browser:
@@ -150,5 +194,6 @@ def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: boo
     except KeyboardInterrupt:
         pass
     finally:
+        launcher.clear_server()
         app.shutdown()
         httpd.server_close()

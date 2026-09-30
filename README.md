@@ -66,12 +66,18 @@ Overleaf とのやり取りは，**人が手で行う「ダウンロード」と
 | 場所 | できること |
 | --- | --- |
 | 上のメニュー | ファイル（新規ファイル・新規フォルダ・アップロード・変更履歴・文字数・ダウンロード），編集，表示，ヘルプ |
-| 📁 ファイル | ファイルツリー．各ファイルの **⋮** で名前の変更・ダウンロード・削除．下に `\section` などのアウトライン |
+| 📁 ファイル | ファイルツリー．各ファイルの **⋮** で名前の変更・ダウンロード・履歴・**パスのコピー**（原稿のフォルダからの相対パス／`data/` からのパス／絶対パス）・削除．下に `\section` などのアウトライン |
 | 🔍 検索 | 原稿の全ファイルを検索（大文字小文字の区別・正規表現・単語単位） |
 | 🕘 変更履歴 | ファイルの前の版と差分．「この版に戻す」「この変更の前に戻す」 |
 | 💬 コメント | PDF に付けたコメントの一覧（未解決の数を表示）．返信・解決・編集・削除，コメント付き PDF の取り込みと書き出し |
 | エディタ | 行番号と色分けの付いたエディタ．入力は自動で保存．`.md` は **Ctrl+Shift+V** で整えた表示に切り替え |
+| エディタのツールバー | Overleaf と同じ並び．元に戻す・見出しの種類・太字（Ctrl+B）・斜体（Ctrl+I）・数式・記号・リンク・参照（原稿の `\label` から選ぶ）・ラベル・引用（`.bib` の文献から選ぶ）・行のコメント・図・表・箇条書き・検索 |
+| コード／ビジュアル | **ビジュアル**にすると，見出しは大きな太字，`\textbf` などは太字や斜体，`\cite` `\ref` `\label` は小さな札，`\item` は「•」，プリアンブルは折りたたんで表示する（文面は変えない）．カーソルを置いたところだけ元のコードに戻るので，そのまま直せる |
+| ヘッダの原稿名 ▾ | PDF・ソース (.zip)・Word・Markdown・HTML のダウンロード，**複製を作る**，**名前を変更**（原稿のフォルダの名前．変更履歴も引き継ぐ） |
+| 🕘 履歴 | Overleaf の History と同じ画面．左にファイル，中央に選んだ版の中身（足した行は緑，消した行は赤の取り消し線，行の中で変わった文字は濃い色），右に日付ごとの版の一覧と**ラベル**（版の ⋮ から付ける）．「この版に戻す」 |
+| 表示 → テーマ | **ライト・ダーク・システムに合わせる**（Overleaf と同じ）．ブラウザに覚える |
 | PDF | リコンパイル・ログ（エラー数）・ダウンロード・ページ番号・拡大縮小．文字の選択とコピー |
+| **✳ Claude** / **Codex**（右上） | 右に Claude Code か Codex のチャット欄を出す（エディタ｜PDF｜チャット欄）．それぞれ VS Code の拡張と同じ操作（[7. Claude Code・Codex と話しながら直す](#7-claude-codecodex-と話しながら直す)） |
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
@@ -83,6 +89,9 @@ Overleaf とのやり取りは，**人が手で行う「ダウンロード」と
 | Python | 3.10 以上（標準ライブラリだけで動きます） |
 | ブラウザ | Chrome・Firefox など |
 | TeX | TeX Live（`install.sh` がホームディレクトリに入れます） |
+| PySide6 | セットアップ・削除・設定の画面に使います（無ければ端末で `install.sh` を使う） |
+| Claude Code | 無くても動きます．右のチャット欄に使います（`claude` コマンドか，VS Code の Claude Code 拡張） |
+| Codex | 無くても動きます．右のチャット欄で Codex を使うときに使います（`codex` コマンドか，VS Code の Codex 拡張） |
 
 画面で使う部品（PDF 表示の pdf.js，エディタの CodeMirror，Markdown 表示の marked，フォント）は
 リポジトリに同梱しているので，インターネットにつながっていなくても動きます．
@@ -90,6 +99,28 @@ Overleaf とのやり取りは，**人が手で行う「ダウンロード」と
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ## 使いはじめる
+
+### 画面でセットアップする
+
+フォルダの **`はじめにこれを実行.sh`** を右クリック →「プログラムとして実行」（または端末で `bash はじめにこれを実行.sh`）．
+アプリの一覧に「overleaf-compiler セットアップ」が登録され，続けてセットアップの画面が開きます．
+
+セットアップの画面は，**ようこそ → 環境の確認 → 内容の選択 → 導入 → 完了** の順に進みます．
+入れるものは下の `install.sh` と同じです（入っているものは飛ばします）．終わると，アプリの一覧に **overleaf-compiler** が出て，ドックにもピン留めされます（セットアップの画面か，設定・状態の画面で外せます）．
+
+| アイコンの操作 | 内容 |
+| --- | --- |
+| クリック | 一覧を開く．サーバーは裏で動くので，端末は要りません |
+| 右クリック → ブラウザのタブで開く | アプリのウィンドウではなく，いつものブラウザのタブで開く |
+| 右クリック → サーバーを止める | 開いているウィンドウを閉じて，裏で動いているサーバーを止める |
+| 右クリック → 設定・状態を確認する | サーバーの状態・必要なものがそろっているか・開き方・原稿の置き場所 |
+
+既定のブラウザが Chromium 系（Vivaldi・Chrome・Chromium・Brave・Edge）なら，タブもアドレス欄も無い専用のウィンドウで開きます．
+アプリの一覧に出るアイコンは本体の1つだけです（セットアップのアイコンは，導入が終わると本体に置き換わります）．
+入れ直しと削除は，本体を右クリック →「設定・状態を確認する」の **セットアップをやり直す**／**削除する…** から．
+**原稿（`data/`）と変更履歴は消しません**（変更履歴と TeX Live は，選んだときだけ消します）．
+
+### 端末でセットアップする
 
 ```sh
 git clone https://github.com/kurokara-YK/overleaf_compiler.git
@@ -106,6 +137,7 @@ bash install.sh
 | pandoc（Word・Markdown・HTML への書き出し用） | `~/.local/bin` |
 | `overleaf-compiler` コマンド | `~/.local/bin` |
 | TeX Live の PATH | `~/.bashrc` に1行足します |
+| アプリの一覧への登録とドックへのピン留め（`--no-launcher` で登録しない） | `~/.local/share/applications` |
 
 終わったら端末を開き直し，次のコマンドで起動します．
 
@@ -146,6 +178,10 @@ data  →  学会2026  →  論文A（原稿）
 
 - 上部の `data / 学会2026` を押すと，その階層へ戻ります．パスはすべて `data` からの相対パスで表示します
 - 主文書（`\documentclass` を含む `.tex`）が**複数ある**原稿は，カードの中のボタンで開くものを選びます
+- **ブラウザの戻る・進むで，1つ前の画面へ戻れます．** 一覧のフォルダ（`?dir=`），原稿（`?p=`），変更履歴（`&view=history`）を URL に持つためです
+- **ブラウザのタブごとに別の原稿を開けます．** タブを複製するか，新しいタブで `http://127.0.0.1:8765/` を開いて別の原稿を選びます．
+  開いた原稿は URL（`?p=原稿`）に入るので，再読み込みやタブの複製でも同じ原稿が開きます．
+  ローカルでの変更は，その原稿を開いているタブにだけ反映されます．見ているタブが無くなった原稿は，組版を止めます
 - `.tex` が無く，中身が LaTeX の `.txt` がある原稿には「`.tex` に名前を変えて開く」ボタンが出ます
 
 ### 3. 直す
@@ -154,7 +190,7 @@ data  →  学会2026  →  論文A（原稿）
 
 | 操作 | 内容 |
 | --- | --- |
-| PDF をダブルクリック | ソースの該当行へ移る |
+| PDF をダブルクリック | ソースの該当行へ移る（「PDF」だけの表示のときは語を選ぶだけで，エディタは開かない） |
 | 境目の **→** | カーソルのある行を PDF 上で示す |
 | 境目の **←** | PDF で選んだ文字（無ければ画面の中央）のソースへ移る |
 | PDF の文字を選んで **✎ ここで直す** | その場で書き換えると，`.tex` の同じ文字が置き換わる（Overleaf には無い操作） |
@@ -238,6 +274,38 @@ zip には中間生成物・組んだ PDF・バックアップを入れません
 同じ「ダウンロード」から，PDF と Word（.docx）・Markdown（.md）・HTML（.html）にも書き出せます．
 Word などへの書き出しは pandoc に任せているので，数式や表，独自のクラスの体裁は崩れることがあります．
 
+### 7. Claude Code・Codex と話しながら直す
+
+右上の **✳ Claude**（または **Ctrl+Shift+L**）で，右に Claude Code のチャット欄が開きます．
+VS Code の Claude Code 拡張と同じ並び・同じ操作です．Claude Code のログインをそのまま使います（API キーは要りません）．
+
+| 場所 | できること |
+| --- | --- |
+| 入力欄 | **Enter** で送る・**Shift+Enter** で改行・**Esc** で返答を止める・**Shift+Tab** でモードを切り替える．画像は貼り付け・ドロップで添付 |
+| 👁 ファイル名 | 開いているファイルとカーソルの行（選んでいれば選んだ行）を添えて送る．押すと添えない |
+| **＋** | Upload from computer（添付）・Add context（`@` でファイルを指す）・Browse the web |
+| **／** | Filter actions…．Clear conversation・Rewind・Export conversation・Switch model・Account & usage・Thinking・Effort・MCP servers・Hooks・Permissions・Status・Memory・Instructions・Slash commands など．入力の先頭に `/` を打っても開く |
+| モデル | Default・Opus・Sonnet・Fable・Haiku など（Claude Code が使えるもの）と Effort（考える深さ） |
+| モード | Manual（毎回確認）・Edit automatically・Plan・Auto |
+| 🎤 | 音声入力（ブラウザの音声認識．Vivaldi では使えないことがあり，Chrome なら使えます） |
+| 🕘 / ⊕ | 過去の会話を開く（Resume）／新しい会話 |
+| 自分の発言を押す | その発言の前まで戻す（Rewind．コードと会話・会話だけ・コードだけ） |
+
+Claude がファイルを直すと，自動で組み直され，エディタと PDF に出ます．Manual や Auto で確認が要るときは，
+入力欄の代わりに「Allow Claude to Edit …?」が出るので，**1 Yes / 2 Yes, allow all edits during this session / 3 No** から選びます．
+
+右上の **Codex** を押すと，同じ場所が Codex のチャット欄に切り替わります（もう一度押すと閉じる）．
+VS Code の Codex 拡張と同じ項目で，Codex のログイン（`~/.codex`）をそのまま使います．Claude と Codex の会話は別々に残ります．
+
+| 場所 | できること |
+| --- | --- |
+| 入力欄 | Ask Codex anything．`@` でファイルを指す．画像は貼り付け・ドロップで添付 |
+| モデル | Select model（GPT-6-Astra など，Codex が使えるもの）と Reasoning（Light・Medium・High・Extra High など） |
+| 承認 | How should Codex actions be approved?：Ask for approval・Approve for me・Full access・Custom (config.toml) |
+| **／** | New chat・Resume・Fork chat・Compact・Model・Reasoning・Permissions・Status・MCP・Init・Rewind・Export conversation |
+| 確認の画面 | **1 Yes / 2 Yes, and don't ask again this session / 3 No, and tell Codex what to do differently** |
+| 自分の発言を押す | その発言の前まで，会話と Codex が変えたファイルを戻す（Revert） |
+
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ## しくみ
@@ -301,6 +369,9 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 | `overleaf-compiler export <原稿> [-o 出力.zip]` | Overleaf に入れる zip を作る |
 | `overleaf-compiler build <原稿>` | 1回だけ組む（latexmk の出力をそのまま出す）．画面が組んでいる原稿では断る |
 | `overleaf-compiler clean <原稿>` | 中間生成物を消す．画面が組んでいる原稿では断る |
+| `overleaf-compiler app [--tab]` | アプリとして開く（サーバーを裏で動かす．アプリの一覧のアイコンが使う） |
+| `overleaf-compiler stop` | アプリのウィンドウを閉じて，裏で動いているサーバーを止める |
+| `overleaf-compiler settings` | 設定・状態の画面を開く |
 
 `<原稿>` は主文書の `.tex` か，それを含むフォルダです．`--data <フォルダ>` で `data/` 以外の置き場を使えます．
 
@@ -315,12 +386,20 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 
 | ファイル | 説明 |
 | --- | --- |
-| `install.sh` | 初回のセットアップ．TeX Live・追加のパッケージ・pandoc・コマンドを入れます |
+| `install.sh` | 端末でのセットアップ．TeX Live・追加のパッケージ・pandoc・コマンド・アプリの一覧への登録 |
+| `はじめにこれを実行.sh` | セットアップをアプリの一覧に登録し，セットアップの画面を開く（導入後は本体のアイコンに置き換わる） |
+| `setup.sh` / `アンインストール.sh` | セットアップの画面／削除の画面を開く（設定・状態の画面のボタンから呼ばれる．画面が使えなければ端末で同じことをする） |
+| `share/` | アプリの一覧に登録する `.desktop` のひな形（右クリックの項目）とアイコン |
+| `gui/` | セットアップ・削除・設定の画面（PySide6）．処理は `overleaf_compiler/install.py` と `launcher.py` にある |
+| `overleaf_compiler/install.py` | 導入と削除（`install.sh` とセットアップの画面が同じものを呼ぶ） |
+| `overleaf_compiler/launcher.py` | アプリとして開く（サーバーを裏で1つだけ動かし，ブラウザのアプリのウィンドウで開く） |
+| `overleaf_compiler/claude.py` | 右のチャット欄．Claude Code（`claude` CLI）を原稿のフォルダで動かし，画面とやり取りする |
+| `overleaf_compiler/codex.py` | 右のチャット欄の Codex 版．`codex app-server` を原稿のフォルダで動かし，claude.py と同じ形で画面とやり取りする |
 | `overleaf_compiler.sh` | 起動スクリプト．`~/.local/bin/overleaf-compiler` はここへのリンクです |
 | `pyproject.toml` | pip / pipx で入れる場合の定義（入れなくても動きます） |
 | `overleaf_compiler/cli.py` | コマンド（serve / check / comments / import / export / build / clean） |
 | `overleaf_compiler/server.py` | ローカルのサーバ（HTTP の受け口と起動）．127.0.0.1 でしか待ち受けません |
-| `overleaf_compiler/app.py` | サーバの本体．開いている原稿を持ち，画面の要求（読み書き・ファイル操作・検索・履歴・コメント）を処理する |
+| `overleaf_compiler/app.py` | サーバの本体．開いている原稿（タブごとに複数）を持ち，画面の要求（読み書き・ファイル操作・検索・履歴・コメント）を処理する |
 | `overleaf_compiler/pandoc.py` | Word・Markdown・HTML への書き出し（pandoc） |
 | `overleaf_compiler/builder.py` | 組版．保存のたびの速い組版と，latexmk による全体の組版 |
 | `overleaf_compiler/project.py` | 主文書の特定，エンジンの推定，フォルダの一覧，ファイルツリー |
@@ -332,7 +411,7 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 | `overleaf_compiler/overleaf.py` | zip の展開と，Overleaf へ戻す zip の作成 |
 | `overleaf_compiler/static/index.html` | 画面の骨組み（HTML） |
 | `overleaf_compiler/static/css/` | 画面の見た目（土台・編集画面・コメント） |
-| `overleaf_compiler/static/js/` | 画面の動き．役割ごとのモジュールに分けている（入口は `main.mjs`．コメントは `comments/`） |
+| `overleaf_compiler/static/js/` | 画面の動き．役割ごとのモジュールに分けている（入口は `main.mjs`．コメントは `comments/`，チャット欄は `claude/`） |
 | `overleaf_compiler/static/pdfjs/` | pdf.js（同梱） |
 | `overleaf_compiler/static/pdflib/` | pdf-lib（同梱）．コメント付き PDF の書き出しに使う |
 | `overleaf_compiler/static/codemirror/` | CodeMirror 5（同梱） |
@@ -364,7 +443,7 @@ Overleaf の Compiler の設定は zip に入らないので，次の順で決�
 | `File 'xxx.sty' not found` | パッケージが足りません．`tlmgr install xxx` で入れます（sudo 不要） |
 | `overleaf-compiler` が見つからない | 端末を開き直す．または `bash overleaf_compiler.sh` で起動する |
 | ダブルクリックしても移らない | 図の中や余白は対応する行がありません．本文やキャプションをダブルクリックするか，ファイルツリーから開く |
-| PDF が更新されない | 「ログ」にエラーが出ていないか確認する |
+| PDF が更新されない | 「ログ」にエラーが出ていないか確認する．自動で組み直すのはブラウザで開いている原稿だけなので，その原稿をタブで開いておく．サーバのプログラムを更新したら起動し直す |
 | 「外でも変更された」と出る | ブラウザとローカルで同じファイルを同時に直しました．どちらを残すか選びます |
 | ポートが使用中 | 自動で次の番号を使います．表示された URL を開きます |
 | Overleaf で組めない | Menu → Main document が主文書になっているか，`latexmkrc` が最上位にあるかを確認する |

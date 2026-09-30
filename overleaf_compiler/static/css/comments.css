@@ -22,7 +22,7 @@
 #cmtList .empty { padding: 10px 4px; line-height: 1.7; }
 .ccard { background: var(--panel); border-radius: 8px; border-left: 3px solid #f0b232; padding: 8px 10px; margin-bottom: 8px;
   font-size: 13px; cursor: pointer; }
-.ccard:hover { background: #3d3f45; }
+.ccard:hover { background: var(--card-hover); }
 .ccard.k-strike, .ccard.k-replace { border-left-color: #e5383b; } .ccard.k-insert { border-left-color: #3b82f6; }
 .ccard.on { box-shadow: 0 0 0 2px var(--accent); }
 .ccard.resolved { border-left-color: var(--ok); opacity: .7; }
@@ -36,7 +36,7 @@
 .ccard .cq { margin: 5px 0 3px; padding: 1px 8px; border-left: 2px solid #5c5f66; color: var(--muted); font-size: 12.5px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ccard.k-strike .cq span, .ccard.k-replace .cq span { text-decoration: line-through; text-decoration-color: #e5383b; }
-.ccard .sug { margin: 2px 0 4px; color: #8ea1ff; }
+.ccard .sug { margin: 2px 0 4px; color: var(--link); }
 .ccard .ct { white-space: pre-wrap; word-break: break-word; color: var(--fg); margin-top: 3px; }
 .ccard .warn { font-size: 11.5px; color: var(--warn); margin-top: 4px; }
 .ccard .rp { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
@@ -44,7 +44,7 @@
 .ccard .rp .when { font-size: 11px; margin-left: 4px; }
 .ccard .rp .t { white-space: pre-wrap; word-break: break-word; }
 .ccard .loc { font-size: 11.5px; color: var(--hint); margin-top: 5px; }
-.ccard .loc a { color: #8ea1ff; cursor: pointer; } .ccard .loc a:hover { text-decoration: underline; }
+.ccard .loc a { color: var(--link); cursor: pointer; } .ccard .loc a:hover { text-decoration: underline; }
 .ccard .cacts { display: none; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
 .ccard.on .cacts { display: flex; }
 .ccard .cacts button { font-size: 12px; padding: 1px 8px; }

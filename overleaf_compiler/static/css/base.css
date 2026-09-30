@@ -8,19 +8,36 @@
 /* 配色は Discord 風の紫。コンパイルの緑だけ Overleaf の色 */
 :root {
   color-scheme: dark;
+  /* 直接の色（ボタン・枠・エディタの色分け）も変数にして、ライトとダークで入れ替える */
+  --btn: #4e5058; --btn-hover: #6d6f78; --edge: #111214; --drop-over: #36374a; --card-hover: #3d3f45;
+  --activeline: #36373d; --cmsel: #4a4e8a; --link: #8ea1ff; --guide: #4e5058; --ocur: #3c4270; --dots-hover: rgba(255,255,255,.12);
+  --syn-tag: #8ea1ff; --syn-kw: #f47fff; --syn-atom: #eb9dff; --syn-cmt: #80848e; --syn-br: #b5bac1; --syn-num: #f0b232;
+  --syn-math: #57d5a0; --syn-head: #f2f3f5;
   --bg: #313338; --bar: #2b2d31; --deep: #1e1f22; --fg: #dbdee1; --bright: #f2f3f5; --muted: #949ba4;
   --hint: #80848e; --line: #3f4147; --panel: #383a40; --accent: #5865f2; --accent-hover: #4752c4;
   --ok: #23a55a; --warn: #f0b232; --err: #f23f43; --hover: #35373c; --sel: #404249; --code: #313338;
   --hl: rgba(240, 178, 50, .35); --go: #098842; --go-hover: #0a6f37; --pdfbg: #1e1f22;
 }
+/* ライトモード（Discord のライトテーマに寄せる）。表示 → テーマで切り替える。html の data-theme で決まる */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff; --bar: #f2f3f5; --deep: #e3e5e8; --fg: #313338; --bright: #060607; --muted: #5c5e66;
+  --hint: #80848e; --line: #d4d7dc; --panel: #ebedef; --accent: #5865f2; --accent-hover: #4752c4;
+  --ok: #1a8a4a; --warn: #b7791f; --err: #d83c3e; --hover: #e8e9eb; --sel: #d4d7dc; --code: #ffffff;
+  --hl: rgba(240, 178, 50, .35); --pdfbg: #d4d7dc;
+  --btn: #d4d7dc; --btn-hover: #c4c9ce; --edge: #c4c9ce; --drop-over: #e6e8fd; --card-hover: #e3e5e8;
+  --activeline: #f2f3f5; --cmsel: #cdd2fb; --link: #4752c4; --guide: #c4c9ce; --ocur: #dfe2fd; --dots-hover: rgba(0,0,0,.08);
+  --syn-tag: #3b48c7; --syn-kw: #a626a4; --syn-atom: #8a3fc4; --syn-cmt: #7a7f88; --syn-br: #5c5e66; --syn-num: #b26b00;
+  --syn-math: #0f7a52; --syn-head: #060607;
+}
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
   font: 14px/1.5 "Noto Sans", "Noto Sans CJK JP", "Hiragino Sans", sans-serif; }
-button, .btn { font: inherit; color: var(--fg); background: #4e5058; border: 1px solid transparent;
+button, .btn { font: inherit; color: var(--fg); background: var(--btn); border: 1px solid transparent;
   border-radius: 6px; padding: 3px 10px; cursor: pointer; text-decoration: none; white-space: nowrap;
   display: inline-flex; align-items: center; gap: 4px; }
-button:hover, .btn:hover { background: #6d6f78; }
+button:hover, .btn:hover { background: var(--btn-hover); }
 button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--accent); color: #fff; } button.primary:hover { background: var(--accent-hover); }
 button.danger { background: #da373c; color: #fff; } button.danger:hover { background: #a12d2f; }
@@ -52,7 +69,7 @@ body.editing #menubar { display: flex; }
 .editor-only { display: none !important; } body.editing .editor-only { display: inline-flex !important; }
 
 /* ---- メニュー（ファイル・編集・表示・ヘルプ、⋮）---- */
-.menu { position: fixed; min-width: 230px; padding: 5px; background: var(--deep); border: 1px solid #111214;
+.menu { position: fixed; min-width: 230px; padding: 5px; background: var(--deep); border: 1px solid var(--edge);
   border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45); z-index: 60; display: none; }
 .menu.open { display: block; }
 .menu .mi { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 4px; cursor: pointer;
@@ -63,6 +80,9 @@ body.editing #menubar { display: flex; }
 .menu .mi.dis { opacity: .45; pointer-events: none; }
 .menu .mi.sub::after { content: "›"; margin-left: auto; font-size: 15px; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
+/* 選んでいる項目（テーマ・エディタのモード）に印を付ける */
+.menu .mi.checked::before { content: "✓"; width: 1em; } .menu .mi:not(.checked)[data-act^="theme:"]::before,
+.menu .mi:not(.checked)[data-act^="edmode:"]::before { content: ""; width: 1em; }
 
 /* ---- 一覧画面（data のフォルダをたどる）---- */
 #home { height: calc(100% - 44px); overflow: auto; display: none; }
@@ -70,9 +90,9 @@ body.home #home { display: block; } body.home #ide { display: none; }
 .home-inner { max-width: 920px; margin: 0 auto; padding: 26px 16px 60px; }
 .home-inner h1 { font-size: 20px; margin: 0 0 4px; color: var(--bright); }
 .home-inner .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
-.drop { border: 2px dashed #4e5058; border-radius: 10px; padding: 16px; text-align: center; color: var(--muted);
+.drop { border: 2px dashed var(--btn); border-radius: 10px; padding: 16px; text-align: center; color: var(--muted);
   margin-bottom: 14px; cursor: pointer; background: var(--bar); transition: border-color .15s, background .15s; }
-.drop.over { border-color: var(--accent); background: #36374a; color: var(--fg); }
+.drop.over { border-color: var(--accent); background: var(--drop-over); color: var(--fg); }
 .drop strong { color: var(--fg); }
 .row { display: flex; gap: 8px; margin-bottom: 14px; } .row input { flex: 1; }
 .msgline { font-size: 13px; margin: -6px 0 12px; min-height: 1em; }
@@ -97,7 +117,7 @@ body.home #home { display: block; } body.home #ide { display: none; }
 
 /* ログ */
 .pop { position: fixed; width: min(560px, calc(100vw - 28px)); max-height: 65vh; overflow: auto; background: var(--deep);
-  border: 1px solid #111214; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45); display: none; z-index: 45; }
+  border: 1px solid var(--edge); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45); display: none; z-index: 45; }
 .pop.open { display: block; }
 .pop div { padding: 7px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
 .pop div[data-file] { cursor: pointer; } .pop div[data-file]:hover { background: var(--hover); }

@@ -1,6 +1,6 @@
 // エディタ（CodeMirror 5）。タブ・自動保存・外での変更の取り込み・Markdown のプレビュー
 import { marked } from "/static/marked/marked.esm.js";
-import { $, api, post, enc, escapeHtml, basename, dirname, store, showToast, bus } from "./util.mjs";
+import { $, api, post, enc, escapeHtml, basename, dirname, store, showToast, bus, url } from "./util.mjs";
 import { info } from "./state.mjs";
 
 export const cm = CodeMirror($("cmhost"), { mode: "stex", lineNumbers: true, lineWrapping: true, styleActiveLine: true,
@@ -150,7 +150,7 @@ function renderMd() {
   const dir = dirname(active.path);
   body.querySelectorAll("img").forEach((img) => {
     const src = img.getAttribute("src") || "";
-    if (!/^(https?:|data:|\/)/.test(src)) img.src = `/raw?path=${enc((dir ? dir + "/" : "") + src)}`;
+    if (!/^(https?:|data:|\/)/.test(src)) img.src = url(`/raw?path=${enc((dir ? dir + "/" : "") + src)}`);
   });
   body.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
 }

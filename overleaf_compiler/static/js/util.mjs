@@ -2,8 +2,29 @@
 export const $ = (id) => document.getElementById(id);
 export const enc = encodeURIComponent;
 
+// このタブの原稿（data からの主文書の相対パス。URL の ?p=）と、タブの番号（サーバが見ているタブを数える）。
+// タブごとに別の原稿を開けるよう、サーバへの要求にはすべて p と t を付ける
+export const tab = { p: new URLSearchParams(location.search).get("p"), t: Math.random().toString(36).slice(2) };
+export function url(path) {
+  if (!tab.p) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}p=${enc(tab.p)}&t=${tab.t}`;
+}
+// 画面の場所を URL に書く。p（原稿）・view（history なら履歴の画面）・dir（一覧で開いているフォルダ）。
+// 画面を移るたびに履歴に積むので、ブラウザの戻る・進むで1つ前の画面へ戻れる（main.mjs の popstate）
+export function pushUrl(q, push = true) {
+  const u = new URLSearchParams();
+  for (const k of ["p", "view", "dir"]) if (q[k]) u.set(k, q[k]);
+  const s = u.toString().replace(/%2F/g, "/"), next = "/" + (s ? `?${s}` : "");
+  if (location.pathname + location.search !== next) history[push ? "pushState" : "replaceState"](null, "", next);
+}
+// タブの原稿を変える（URL も変える。複製したタブ・再読み込みでも同じ原稿が開く）
+export function setTabProject(p, push = true, dir = "") {
+  tab.p = p;
+  pushUrl(p ? { p } : { dir }, push);
+}
+
 export async function api(path, opts) {
-  const r = await fetch(path, opts);
+  const r = await fetch(url(path), opts);
   const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
   if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
   return j;
@@ -74,6 +95,7 @@ export const closeBtn = [{ label: "閉じる", value: 1, cls: "primary" }];
 //   comments  コメントを読み直した
 //   files     ファイルが増えた・消えた（ツリーを読み直す）
 //   reopen    原稿を開いた・閉じた（画面を作り直す。待てる）
+//   opened    原稿を開き終えた（右のチャット欄が作り直す）
 const listeners = new Map();
 export const bus = {
   on(name, fn) { if (!listeners.has(name)) listeners.set(name, []); listeners.get(name).push(fn); },

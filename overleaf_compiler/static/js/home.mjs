@@ -1,10 +1,12 @@
 // 一覧画面（data のフォルダをたどる）と、上のパンくず（data からの相対パス）
-import { $, api, post, enc, escapeHtml, basename, dirname, ago, confirmBox, fail, bus } from "./util.mjs";
+import { $, api, post, enc, escapeHtml, basename, dirname, ago, confirmBox, fail, bus, tab, setTabProject, pushUrl } from "./util.mjs";
 import { info } from "./state.mjs";
 import { saveAll, dirty } from "./editor.mjs";
 
-// 一覧で開いているフォルダ。null はまだ選んでいない（起動したときのフォルダを開く）。"" は data の直下
-let browsePath = null, entries = [];
+// 一覧で開いているフォルダ。null はまだ選んでいない（起動したときのフォルダを開く）。"" は data の直下。
+// URL の ?dir= に書くので、ブラウザの戻るで前のフォルダへ戻れる
+let browsePath = new URLSearchParams(location.search).get("dir"), entries = [];
+export function setBrowsePath(p) { browsePath = p; }
 
 // ---- パンくず ----
 function crumbHtml(parts, lastBold) {
@@ -22,11 +24,12 @@ export function setCrumb() {
 $("crumb").addEventListener("click", (e) => { const a = e.target.closest("a[data-go]"); if (a) goHome(a.dataset.go); });
 $("brand").onclick = () => goHome(info && info.main ? dirname(dirname(info.rel)) : "");
 
-// 一覧へ戻る。原稿を開いていれば閉じる（組版を止める）
+// 一覧へ戻る。原稿を開いていれば閉じる（ほかのタブが見ていなければ、サーバが組版を止める）
 export async function goHome(path) {
   await saveAll();
   if (dirty() && !(await confirmBox("保存できていない変更がある", "破棄して一覧へ戻る？", "戻る", true))) return;
   try { if (info && info.main) await post("/api/close"); } catch (e) { fail(e); }
+  setTabProject(null, true, path);
   browsePath = path;
   await bus.emit("reopen");
 }
@@ -35,10 +38,12 @@ export async function goHome(path) {
 // 原稿を開いていないときの画面。前に見ていたフォルダか、起動したときのフォルダを出す
 export function showStartHome() {
   $("q").value = "";
-  return showHome(browsePath ?? info.start ?? "");
+  return showHome(browsePath ?? info.start ?? "", false);
 }
+export const showHomeAt = (path) => showHome(path, false);
 function msg(text, cls = "") { const m = $("homeMsg"); m.className = `msgline ${cls}`; m.textContent = text; }
-async function showHome(path) {
+async function showHome(path, push = true) {
+  if (push && (path || "") !== (browsePath || "")) pushUrl({ dir: path });
   document.body.className = "home";
   document.title = "overleaf-compiler";
   browsePath = path || "";
@@ -98,8 +103,13 @@ function renderList() {
   }
 }
 $("q").addEventListener("input", renderList);
+// このタブで原稿を開く（ほかのタブの原稿はそのまま）
 async function openProject(tex) {
-  try { await post("/api/open", { tex }); await bus.emit("reopen"); } catch (e) { msg(e.message, "err"); }
+  try {
+    const r = await post("/api/open", { tex, t: tab.t });
+    setTabProject(r.rel);
+    await bus.emit("reopen");
+  } catch (e) { msg(e.message, "err"); }
 }
 async function renameAndOpen(file, name) {
   const to = name.replace(/\.[^.]+$/, ".tex");

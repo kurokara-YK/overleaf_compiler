@@ -10,6 +10,8 @@
   overleaf-compiler build  <原稿>                    1回だけ組む（latexmk の出力をそのまま出す）
   overleaf-compiler export <原稿> [-o 出力.zip]      Overleaf の Upload Project に入れる zip を作る
   overleaf-compiler clean  <原稿>                    中間生成物を消す
+  overleaf-compiler app [--tab]                      アプリとして開く（サーバを裏で動かす。アプリの一覧から使う）
+  overleaf-compiler stop                             裏で動いているサーバを止める
 
 <原稿> は主文書の .tex か、それを含むディレクトリ。
 ワークスペースは data/ の下のフォルダ。その中に Overleaf から取り込んだ原稿を置く。
@@ -113,6 +115,17 @@ def cmd_serve(a) -> None:
         if not p.is_relative_to(data):   # data の外なら、その親を置き場として扱う
             data = p.parent
         start = str(p.relative_to(data)) if p != data else ""
+    # アプリとして裏で動いているサーバがあれば、2つ目は起動せずにそれを開く
+    from .launcher import server_info
+    s = server_info()
+    if s and Path(s["data"]) == data and not a.no_browser:
+        import webbrowser
+        from urllib.parse import quote
+        rel = str(tex.relative_to(data)) if tex and tex.is_relative_to(data) else ""
+        url = f"http://127.0.0.1:{s['port']}/" + (f"?p={quote(rel)}" if rel else f"?dir={quote(start)}" if start else "")
+        print(f"overleaf-compiler: 動いているサーバを開いた  {url}\n        （止めるには  overleaf-compiler stop）")
+        webbrowser.open(url)
+        return
     if tex:
         print(f"組版: {_engine_note(tex)}")
     serve(data, start, tex, a.port, not a.no_browser)
@@ -250,13 +263,20 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("clean", help="中間生成物を消す")
     s.add_argument("path", nargs="?", default=".")
     s.set_defaults(fn=cmd_clean)
+    from .launcher import cmd_app, cmd_stop
+    s = sub.add_parser("app", help="アプリとして開く（サーバを裏で動かし、アプリのウィンドウで開く）")
+    s.add_argument("--tab", action="store_true", help="ブラウザのタブで開く")
+    s.add_argument("--background", action="store_true", help="サーバだけ起こしておく")
+    s.set_defaults(fn=cmd_app)
+    s = sub.add_parser("stop", help="裏で動いているサーバを止める")
+    s.set_defaults(fn=cmd_stop)
     argv = sys.argv[1:] if argv is None else argv
     # サブコマンドを省いたら serve（引数なしなら data/ のワークスペース一覧を開く）
     if not argv or (argv[0] not in sub.choices and argv[0] not in ("-h", "--help")):
         argv = ["serve", *argv]
     a = ap.parse_args(argv)
     try:
-        if a.cmd != "import":
+        if a.cmd not in ("import", "stop"):
             ensure_texlive()
         a.fn(a)
     except ProjectError as e:

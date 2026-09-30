@@ -39,6 +39,8 @@ export function setLayout(l) {
   store.set("oc.layout", l);
   setTimeout(() => { cm.refresh(); refit(); }, 0);
 }
+// PDF だけの表示か（PDF のダブルクリックを、ソースへ移る操作ではなく文字の選択に使う）
+export const pdfOnly = () => ide.classList.contains("only-pdf");
 // ソースへ移るとき、PDF だけの表示ならエディタも出す
 export function revealEditor() { if (ide.classList.contains("only-pdf")) setLayout("both"); }
 $("layout").onclick = (e) => { const b = e.target.closest("button"); if (b) setLayout(b.dataset.l); };

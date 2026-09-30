@@ -1,7 +1,7 @@
 // ソースと PDF の行き来（SyncTeX）。→ でカーソル行を PDF に示し、PDF のダブルクリックや ← でソースの行へ
 import { $, api, enc, escapeHtml, showToast } from "./util.mjs";
 import { cm, active, openTab } from "./editor.mjs";
-import { revealEditor } from "./panels.mjs";
+import { revealEditor, pdfOnly } from "./panels.mjs";
 import { viewer, pagesEl, pointIn, showBoxes } from "./pdf.mjs";
 
 $("toPdf").onclick = async () => {   // カーソルのある行を PDF で示す
@@ -24,6 +24,9 @@ function textAround(cx, cy) {
   return t.slice(Math.max(0, o - 6), o + 6);
 }
 pagesEl.addEventListener("dblclick", (e) => {   // Overleaf と同じ。PDF をダブルクリックするとソースの該当行へ
+  // PDF だけの表示では、ダブルクリックは語の選択（ブラウザの既定）に使い、エディタを開かない。
+  // ソースへ移りたいときは境目の ← を押す
+  if (pdfOnly()) return;
   const pg = e.target.closest(".page");
   if (pg) gotoSource(...pointIn(pg, e.clientX, e.clientY), textAround(e.clientX, e.clientY));
 });

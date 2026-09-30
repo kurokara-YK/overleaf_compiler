@@ -1,0 +1,157 @@
+/* Discord 風。紫を基調にする（padpilot と同じ）。セットアップ・削除・設定の画面で使う。 */
+
+QWizard, QWidget, QDialog {
+    background: #313338;          /* Discord のメイン背景 */
+    color: #dbdee1;
+    font-size: 14px;
+}
+
+QLabel#Title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #f2f3f5;
+}
+QLabel#Subtitle { font-size: 13px; color: #949ba4; }
+QLabel#Section  { font-size: 15px; font-weight: bold; color: #f2f3f5; padding-top: 6px; }
+
+QLabel#Ok    { color: #23a55a; }
+QLabel#Warn  { color: #f0b232; }
+QLabel#Error { color: #f23f43; }
+
+/* 状態を大きく見せるカード */
+QFrame#Card {
+    background: #2b2d31;
+    border: 1px solid #1e1f22;
+    border-radius: 10px;
+    padding: 4px;
+}
+QFrame#CardOk    { background: #2b2d31; border: 2px solid #23a55a; border-radius: 10px; }
+QFrame#CardWarn  { background: #2b2d31; border: 2px solid #f0b232; border-radius: 10px; }
+
+QLabel#Big     { font-size: 17px; font-weight: bold; color: #f2f3f5; }
+QLabel#BigOk   { font-size: 17px; font-weight: bold; color: #23a55a; }
+QLabel#BigWarn { font-size: 17px; font-weight: bold; color: #f0b232; }
+
+QPushButton {
+    background: #4e5058;
+    border: none;
+    border-radius: 4px;
+    padding: 9px 20px;
+    color: #ffffff;
+    font-weight: 500;
+}
+QPushButton:hover    { background: #6d6f78; }
+QPushButton:disabled { background: #3a3c41; color: #80848e; }
+
+/* Discord のブランドカラー */
+QPushButton#Primary {
+    background: #5865f2;
+    color: #ffffff;
+    font-weight: bold;
+}
+QPushButton#Primary:hover    { background: #4752c4; }
+QPushButton#Primary:disabled { background: #3c4270; color: #a0a4b8; }
+
+QPushButton#Danger { background: #da373c; }
+QPushButton#Danger:hover { background: #a12d2f; }
+
+QCheckBox { padding: 6px; spacing: 10px; color: #dbdee1; }
+QCheckBox::indicator {
+    width: 18px; height: 18px;
+    border: 1px solid #6d6f78;
+    border-radius: 4px;
+    background: #1e1f22;
+}
+QCheckBox::indicator:checked {
+    background: #5865f2;
+    border-color: #5865f2;
+}
+QCheckBox:disabled { color: #6d6f78; }
+
+QComboBox {
+    background: #1e1f22;
+    border: 1px solid #1e1f22;
+    border-radius: 4px;
+    padding: 5px 8px;
+    color: #dbdee1;
+}
+QComboBox:hover { border-color: #5865f2; }
+QComboBox QAbstractItemView {
+    background: #2b2d31;
+    color: #dbdee1;
+    selection-background-color: #5865f2;
+    border: 1px solid #1e1f22;
+    outline: none;
+}
+
+QTextEdit, QPlainTextEdit {
+    background: #1e1f22;
+    border: 1px solid #1e1f22;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #b5bac1;
+}
+
+QTableWidget {
+    background: #2b2d31;
+    border: 1px solid #1e1f22;
+    border-radius: 6px;
+    gridline-color: #1e1f22;
+    color: #dbdee1;
+}
+QTableWidget::item { padding: 4px; }
+QTableWidget::item:selected { background: #404249; color: #ffffff; }
+QHeaderView::section {
+    background: #232428;
+    color: #949ba4;
+    border: none;
+    padding: 8px;
+    font-weight: bold;
+}
+
+QProgressBar {
+    background: #1e1f22;
+    border: none;
+    border-radius: 4px;
+    height: 8px;
+    text-align: center;
+}
+QProgressBar::chunk { background: #5865f2; border-radius: 4px; }
+
+QScrollBar:vertical {
+    background: #2b2d31; width: 10px; border-radius: 5px;
+}
+QScrollBar::handle:vertical {
+    background: #1e1f22; border-radius: 5px; min-height: 24px;
+}
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
+
+/* メイン画面のサイドバー (Discord 風) */
+QWidget#Sidebar {
+    background: #2b2d31;
+    border-right: 1px solid #1e1f22;
+}
+QPushButton#NavItem {
+    background: transparent;
+    color: #b5bac1;
+    text-align: left;
+    padding: 9px 14px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+QPushButton#NavItem:hover   { background: #35373c; color: #dbdee1; }
+QPushButton#NavItem:checked { background: #404249; color: #ffffff; font-weight: bold; }
+
+/* overleaf-compiler の設定画面 */
+QRadioButton { padding: 4px; spacing: 10px; color: #dbdee1; }
+QRadioButton::indicator { width: 16px; height: 16px; border: 1px solid #6d6f78; border-radius: 8px; background: #1e1f22; }
+QRadioButton::indicator:checked { background: #5865f2; border-color: #5865f2; }
+QLabel#Path { font-family: monospace; font-size: 12px; color: #b5bac1; }
+QLabel#RowOk   { color: #23a55a; font-weight: bold; }
+QLabel#RowWarn { color: #f0b232; font-weight: bold; }
+QLabel#RowOff  { color: #80848e; font-weight: bold; }
+QPushButton#Small { padding: 5px 12px; font-size: 13px; }
+/* カードの中の文字や選択肢に、画面の背景色を重ねない */
+QFrame#Card QLabel, QFrame#CardOk QLabel, QFrame#CardWarn QLabel,
+QFrame#Card QRadioButton, QFrame#Card QCheckBox { background: transparent; }

@@ -1,6 +1,6 @@
 // PDF の表示（pdf.js）。描画・拡大縮小・ページ番号と、画面の位置と PDF の座標（pt、左上が原点）の変換
 import * as pdfjs from "/static/pdfjs/pdf.min.mjs";
-import { $, bus } from "./util.mjs";
+import { $, bus, url } from "./util.mjs";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/pdfjs/pdf.worker.min.mjs";
 export { pdfjs };
@@ -20,7 +20,7 @@ export async function loadPdf() {
   if (rendering) { pendingReload = true; return; }
   rendering = true;
   try {
-    const doc = await pdfjs.getDocument({ url: `/pdf?v=${version}&t=${Date.now()}`, ...PDFJS_OPTS }).promise;
+    const doc = await pdfjs.getDocument({ url: url(`/pdf?v=${version}&n=${Date.now()}`), ...PDFJS_OPTS }).promise;
     const sizes = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const v = (await doc.getPage(i)).getViewport({ scale: 1 });

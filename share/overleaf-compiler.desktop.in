@@ -1,0 +1,32 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=overleaf-compiler
+Name[ja]=overleaf-compiler（LaTeX 原稿の編集）
+GenericName=LaTeX Editor
+GenericName[ja]=LaTeX エディタ
+Comment=Edit and compile Overleaf projects locally
+Comment[ja]=Overleaf の原稿をローカルで直して組む
+Exec=@EXEC@ app
+Icon=@ICON@
+Terminal=false
+StartupNotify=false
+StartupWMClass=overleaf-compiler
+Categories=Office;Publishing;TextEditor;Utility;
+Keywords=latex;tex;overleaf;pdf;論文;
+Actions=Tab;Stop;Settings;
+
+[Desktop Action Tab]
+Name=Open in a browser tab
+Name[ja]=ブラウザのタブで開く
+Exec=@EXEC@ app --tab
+
+[Desktop Action Stop]
+Name=Stop the server
+Name[ja]=サーバーを止める
+Exec=@EXEC@ stop
+
+[Desktop Action Settings]
+Name=Settings and status
+Name[ja]=設定・状態を確認する
+Exec=@EXEC@ settings

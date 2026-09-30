@@ -19,20 +19,20 @@
 .titem:hover { background: var(--hover); }
 .titem.active { background: var(--go); color: #fff; }
 .titem.main .tn { font-weight: 700; }
-.titem .guide { position: absolute; top: 0; bottom: 0; border-left: 1px solid #4e5058; }
+.titem .guide { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--guide); }
 .titem .chev { width: 14px; text-align: center; flex: none; color: var(--muted); font-size: 11px; }
-.titem.active .chev { color: #fff; }
+.titem.active .chev { color: var(--bright); }
 .titem .fi { width: 16px; text-align: center; flex: none; font-size: 13px; }
 .titem .tn { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .titem .dots { visibility: hidden; background: transparent; padding: 0 6px; color: inherit; }
 .titem:hover .dots, .titem.active .dots { visibility: visible; }
-.titem .dots:hover { background: rgba(255,255,255,.12); }
+.titem .dots:hover { background: var(--dots-hover); }
 #outline { border-top: 1px solid var(--deep); max-height: 40%; display: flex; flex-direction: column; }
 #outline .shead { cursor: pointer; }
 #outlineList { overflow: auto; padding-bottom: 6px; font-size: 13px; }
 .oitem { padding: 3px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg); }
 .oitem:hover { background: var(--hover); }
-.oitem.cur { background: #3c4270; }
+.oitem.cur { background: var(--ocur); }
 /* 検索 */
 .sbox { padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 6px; }
 .sbox .r1 { display: flex; gap: 6px; } .sbox .r1 input { flex: 1; min-width: 0; }
@@ -62,6 +62,9 @@
 .vgrip { width: 5px; cursor: col-resize; flex: none; background: var(--deep); }
 .vgrip:hover, .vgrip.drag { background: var(--accent); }
 #editor { width: 50%; min-width: 200px; display: flex; flex-direction: column; background: var(--bg); }
+#edtop { display: flex; align-items: center; background: var(--bar); min-height: 34px; }
+#edtop #tabs { flex: 1; min-width: 0; }
+#edmode { margin: 0 6px; flex: none; background: var(--deep); }
 #tabs { display: flex; overflow-x: auto; background: var(--bar); min-height: 34px; }
 .tab { display: flex; align-items: center; gap: 6px; padding: 6px 10px 6px 12px; font-size: 13px; cursor: pointer;
   white-space: nowrap; color: var(--muted); user-select: none; border-right: 1px solid var(--deep); }
@@ -81,7 +84,7 @@
 #mdview .md { max-width: 860px; margin: 0 auto; padding: 24px 32px 60px; line-height: 1.75; color: var(--fg); }
 #mdview .md h1, #mdview .md h2 { border-bottom: 1px solid var(--line); padding-bottom: .3em; color: var(--bright); }
 #mdview .md h3, #mdview .md h4 { color: var(--bright); }
-#mdview .md a { color: #8ea1ff; }
+#mdview .md a { color: var(--link); }
 #mdview .md code { font-family: Monaco, Menlo, "Ubuntu Mono", Consolas, "Noto Sans CJK JP", monospace;
   background: var(--deep); padding: .1em .35em; border-radius: 4px; font-size: .92em; }
 #mdview .md pre { background: var(--deep); padding: 12px 14px; border-radius: 6px; overflow: auto; }
@@ -164,24 +167,95 @@
 .cm-s-discord .CodeMirror-gutters { background: var(--bar); border-right: 1px solid var(--deep); }
 .cm-s-discord .CodeMirror-linenumber { color: var(--hint); }
 .cm-s-discord .CodeMirror-cursor { border-left: 2px solid var(--bright); }
-.cm-s-discord .CodeMirror-activeline-background { background: #36373d; }
-.cm-s-discord .CodeMirror-selected, .cm-s-discord .CodeMirror-focused .CodeMirror-selected { background: #4a4e8a; }
+.cm-s-discord .CodeMirror-activeline-background { background: var(--activeline); }
+.cm-s-discord .CodeMirror-selected, .cm-s-discord .CodeMirror-focused .CodeMirror-selected { background: var(--cmsel); }
 .cm-s-discord .CodeMirror-line::selection, .cm-s-discord .CodeMirror-line > span::selection,
-.cm-s-discord .CodeMirror-line > span > span::selection { background: #4a4e8a; }
+.cm-s-discord .CodeMirror-line > span > span::selection { background: var(--cmsel); }
 .cm-s-discord .CodeMirror-matchingbracket { color: var(--bright) !important; text-decoration: underline; }
-.cm-s-discord .cm-tag { color: #8ea1ff; }            /* \command */
-.cm-s-discord .cm-keyword { color: #f47fff; }        /* \begin \end */
-.cm-s-discord .cm-atom { color: #eb9dff; }           /* 環境名 */
-.cm-s-discord .cm-comment { color: #80848e; font-style: italic; }
-.cm-s-discord .cm-bracket { color: #b5bac1; }
-.cm-s-discord .cm-number { color: #f0b232; }
-.cm-s-discord .cm-string, .cm-s-discord .cm-variable-2 { color: #57d5a0; }   /* 数式 */
-.cm-s-discord .cm-builtin, .cm-s-discord .cm-def { color: #8ea1ff; }
+.cm-s-discord .cm-tag { color: var(--syn-tag); }            /* \command */
+.cm-s-discord .cm-keyword { color: var(--syn-kw); }        /* \begin \end */
+.cm-s-discord .cm-atom { color: var(--syn-atom); }           /* 環境名 */
+.cm-s-discord .cm-comment { color: var(--syn-cmt); font-style: italic; }
+.cm-s-discord .cm-bracket { color: var(--syn-br); }
+.cm-s-discord .cm-number { color: var(--syn-num); }
+.cm-s-discord .cm-string, .cm-s-discord .cm-variable-2 { color: var(--syn-math); }   /* 数式 */
+.cm-s-discord .cm-builtin, .cm-s-discord .cm-def { color: var(--syn-tag); }
 .cm-s-discord .cm-error { color: var(--err); }
-.cm-s-discord .cm-header { color: #f2f3f5; font-weight: 700; }   /* Markdown */
-.cm-s-discord .cm-link, .cm-s-discord .cm-url { color: #8ea1ff; }
-.cm-s-discord .cm-quote { color: #949ba4; font-style: italic; }
+.cm-s-discord .cm-header { color: var(--syn-head); font-weight: 700; }   /* Markdown */
+.cm-s-discord .cm-link, .cm-s-discord .cm-url { color: var(--link); }
+.cm-s-discord .cm-quote { color: var(--muted); font-style: italic; }
 .cm-s-discord .cm-strong { font-weight: 700; } .cm-s-discord .cm-em { font-style: italic; }
-.cm-s-discord .cm-variable-3, .cm-s-discord .cm-keyword.cm-md { color: #f47fff; }
+.cm-s-discord .cm-variable-3, .cm-s-discord .cm-keyword.cm-md { color: var(--syn-kw); }
 
 @media (max-width: 900px) { .crumb { display: none; } #side, #rail, #sideGrip { display: none; } }
+
+/* ---- ビジュアル表示（Overleaf の Visual Editor に当たる。visual.mjs） ---- */
+#cmhost.visual .CodeMirror-line { font-family: "Noto Sans", "Noto Sans CJK JP", "Hiragino Sans", sans-serif; }
+#cmhost.visual .vis-h { font-weight: 700; color: var(--bright); }
+#cmhost.visual .vis-h0 { font-size: 1.6em; } #cmhost.visual .vis-h1 { font-size: 1.4em; }
+#cmhost.visual .vis-h2 { font-size: 1.2em; } #cmhost.visual .vis-h3, #cmhost.visual .vis-h4 { font-size: 1.05em; }
+#cmhost.visual .vis-h span, #cmhost.visual .vis-b span, #cmhost.visual .vis-i span { color: inherit; }
+.vis-b { font-weight: 700; } .vis-i { font-style: italic; } .vis-u { text-decoration: underline; }
+.vis-tt { font-family: "Ubuntu Mono", monospace; }
+.vis-chip { display: inline-block; padding: 0 5px; margin: 0 1px; border-radius: 4px; font-size: .88em; line-height: 1.5;
+  background: var(--panel); border: 1px solid var(--line); color: var(--link); cursor: text; }
+.vis-label { color: var(--muted); }
+.vis-env { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: .85em; color: var(--muted);
+  background: var(--bar); border: 1px dashed var(--line); cursor: text; }
+.vis-item { color: var(--accent); font-weight: 700; padding-right: 2px; }
+.vis-pre { display: inline-block; padding: 2px 10px; border-radius: 4px; color: var(--muted); background: var(--panel);
+  border: 1px solid var(--line); cursor: pointer; }
+
+/* ---- エディタのツールバー（toolbar.mjs。Overleaf と同じ並び）---- */
+#edtool { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 3px 6px; background: var(--bar);
+  border-bottom: 1px solid var(--line); flex: none; }
+#edtool.off > :not(.tgrow):not(#edmode):not([data-t="search"]) { display: none; }
+#edtool > button { background: transparent; padding: 2px 7px; font-size: 13px; color: var(--fg); border-radius: 4px; }
+#edtool > button:hover { background: var(--hover); }
+#edtool .tsep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; flex: none; }
+#edtool .tgrow { flex: 1; }
+#edtool #edmode { margin: 0 6px; background: var(--deep); }
+#edtool #edmode button.on { background: var(--go); color: #fff; }
+.pick { display: flex; flex-wrap: wrap; gap: 4px; max-height: 260px; overflow: auto; }
+.pick .pk { font-family: "Ubuntu Mono", monospace; }
+.pick.sym .pk { width: 38px; justify-content: center; font-size: 16px; }
+
+/* ---- ヘッダの原稿名（押すと原稿のメニュー）---- */
+.ptitle { background: transparent; font-weight: 600; color: var(--bright); max-width: 34vw; overflow: hidden;
+  text-overflow: ellipsis; }
+.ptitle:hover { background: var(--hover); }
+
+/* ---- 変更履歴の画面（histpage.mjs。Overleaf の History）---- */
+#histpage { display: none; height: calc(100% - 44px); flex-direction: column; }
+body.history #histpage { display: flex; } body.history #ide, body.history #home { display: none; }
+body.history #menubar, body.history .editor-only { display: none !important; }
+#hpTop { display: flex; align-items: center; gap: 14px; padding: 6px 10px; background: var(--bar); border-bottom: 1px solid var(--line); }
+#hpTitle { font-weight: 600; color: var(--bright); }
+#hpBody { flex: 1; display: flex; min-height: 0; }
+#hpFiles { width: 250px; flex: none; overflow: auto; background: var(--bar); border-right: 1px solid var(--line); padding: 6px 0; }
+.hpf { padding: 5px 12px; cursor: pointer; display: flex; gap: 6px; align-items: center; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hpf:hover { background: var(--hover); } .hpf.on { background: var(--go); color: #fff; }
+.hpf .badge { margin-left: auto; font-size: 11px; background: var(--panel); color: var(--fg); padding: 0 6px; border-radius: 4px; }
+#hpMain { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#hpHead { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--bar); border-bottom: 1px solid var(--line); font-size: 13px; }
+#hpCount { margin-left: auto; color: var(--muted); }
+#hpText { flex: 1; overflow: auto; font: 13px/1.65 "Ubuntu Mono", "Noto Sans CJK JP", monospace; background: var(--bg); padding: 4px 0; }
+.hpl { display: flex; white-space: pre-wrap; }
+.hpl .n { width: 52px; flex: none; text-align: right; padding-right: 12px; color: var(--hint); user-select: none; }
+.hpl .s { flex: 1; padding-right: 14px; word-break: break-all; }
+.hpl.add { background: rgba(35, 165, 90, .14); } .hpl.del { background: rgba(242, 63, 67, .10); }
+.hpl.del .s { text-decoration: line-through; text-decoration-color: rgba(242, 63, 67, .6); color: var(--muted); }
+.hpl .sa { background: rgba(35, 165, 90, .38); border-radius: 2px; }
+.hpl .sd { background: rgba(242, 63, 67, .38); border-radius: 2px; }
+#hpList { width: 300px; flex: none; background: var(--bar); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+#hpTabs { margin: 8px; display: flex; } #hpTabs button { flex: 1; justify-content: center; }
+#hpTabs button.on { background: var(--go); }
+#hpEntries { flex: 1; overflow: auto; }
+.hpday { padding: 12px 14px 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.hpe { padding: 8px 34px 8px 14px; border-bottom: 1px solid var(--line); cursor: pointer; position: relative; }
+.hpe:hover { background: var(--hover); } .hpe.on { background: var(--go); color: #fff; }
+.hpe .t { font-weight: 600; } .hpe .k { font-size: 12px; color: var(--muted); } .hpe.on .k { color: #e3f6ea; }
+.hpe .who::before { content: "■ "; color: var(--accent); }
+.hpe .lab { display: inline-block; font-size: 11px; background: var(--accent); color: #fff; border-radius: 4px; padding: 0 6px; margin: 3px 4px 0 0; }
+.hpe .dots { position: absolute; right: 6px; top: 6px; background: transparent; padding: 0 6px; color: inherit; }

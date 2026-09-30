@@ -1,6 +1,6 @@
 // コメント付きでダウンロード。今の PDF にコメントを PDF の注釈として書き込む（pdf-lib）。
 // Acrobat・ブラウザ・プレビューなどでコメントとして見える。返信と解決は Acrobat と同じく元の注釈への返信（IRT）にする
-import { $, showToast, fail } from "../util.mjs";
+import { $, showToast, fail, url } from "../util.mjs";
 import { info } from "../state.mjs";
 import { openMenu } from "../menu.mjs";
 import { comments, loadComments, isResolved, KIND, PIN_KINDS } from "./model.mjs";
@@ -72,7 +72,7 @@ export async function downloadAnnotated() {
   showToast("コメント付きの PDF を作っている…", "", 0);
   try {
     const lib = await import("/static/pdflib/pdf-lib.esm.min.js");
-    const bytes = await (await fetch(`/pdf?t=${Date.now()}`)).arrayBuffer();
+    const bytes = await (await fetch(url(`/pdf?n=${Date.now()}`))).arrayBuffer();
     const doc = await lib.PDFDocument.load(bytes, { updateMetadata: false });
     const n = comments.filter((c) => writeAnnotation(lib, doc, c)).length;
     const out = await doc.save();

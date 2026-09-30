@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>overleaf-compiler</title>
 <link rel="icon" href="data:,">
+<script>/* テーマを最初の描画の前に決める（ちらつかないように）。theme.mjs と同じ判定 */
+try { const t = localStorage.getItem("oc.theme") || "system";
+  document.documentElement.dataset.theme = t === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : t;
+} catch (e) { document.documentElement.dataset.theme = "dark"; }</script>
 <link rel="stylesheet" href="/static/codemirror/codemirror.css">
 <script src="/static/codemirror/codemirror.js"></script>
 <script src="/static/codemirror/stex.js"></script>
@@ -13,6 +17,7 @@
 <link rel="stylesheet" href="/static/css/base.css">
 <link rel="stylesheet" href="/static/css/ide.css">
 <link rel="stylesheet" href="/static/css/comments.css">
+<link rel="stylesheet" href="/static/css/claude.css">
 </head>
 <body class="home">
 <header>
@@ -24,9 +29,13 @@
     <button class="mtop" data-menu="mHelp">ヘルプ</button>
   </nav>
   <span class="crumb" id="crumb"></span>
+  <button class="ptitle editor-only" id="ptitle" title="原稿のメニュー（ダウンロード・複製・名前の変更）"><span id="ptname"></span> ▾</button>
+  <button class="ghost editor-only" id="histBtn" title="変更履歴（Overleaf の History）">🕘 履歴</button>
   <span class="seg editor-only" id="layout" title="レイアウト">
     <button data-l="editor">エディタ</button><button data-l="both" class="on">両方</button><button data-l="pdf">PDF</button>
   </span>
+  <button class="editor-only" id="claudeBtn" title="右に Claude Code のチャット欄を出す／隠す（Ctrl+Shift+L）">✳ Claude</button>
+  <button class="editor-only" id="codexBtn" title="右に Codex のチャット欄を出す／隠す"><img src="/claude-asset/codex-logo.svg" alt="">Codex</button>
 </header>
 
 <!-- メニュー -->
@@ -53,6 +62,23 @@
   <div class="mi pandoc" data-act="dl:md">Markdown (.md) に書き出す</div>
   <div class="mi pandoc" data-act="dl:html">HTML (.html) に書き出す</div>
 </div>
+<div class="menu" id="mProject">
+  <div class="mi" data-act="dl:pdf">PDF をダウンロード</div>
+  <div class="mi" data-act="dl:zip">ソース (.zip) をダウンロード</div>
+  <div class="mi pandoc" data-act="dl:docx">Word (.docx) に書き出す</div>
+  <div class="mi pandoc" data-act="dl:md">Markdown (.md) に書き出す</div>
+  <div class="mi pandoc" data-act="dl:html">HTML (.html) に書き出す</div>
+  <hr>
+  <div class="mi" data-act="copyProject">複製を作る</div>
+  <div class="mi" data-act="renameProject">名前を変更</div>
+</div>
+<div class="menu" id="mHeading">
+  <div class="mi" data-act="head:normal">標準の文</div>
+  <div class="mi" data-act="head:section"><b>節</b>（\section）</div>
+  <div class="mi" data-act="head:subsection">小節（\subsection）</div>
+  <div class="mi" data-act="head:subsubsection">小小節（\subsubsection）</div>
+  <div class="mi" data-act="head:paragraph">段落の見出し（\paragraph）</div>
+</div>
 <div class="menu" id="mEdit">
   <div class="mi" data-act="undo">元に戻す<span class="k">Ctrl+Z</span></div>
   <div class="mi" data-act="redo">やり直す<span class="k">Ctrl+Y</span></div>
@@ -68,8 +94,16 @@
   <div class="mi" data-act="layout:pdf">PDF だけ</div>
   <hr>
   <div class="mi" data-act="toggleSide">左のパネルを表示／隠す</div>
+  <div class="mi" data-act="claude">Claude Code のチャット欄<span class="k">Ctrl+Shift+L</span></div>
   <div class="mi" data-act="comments">コメントの一覧</div>
   <div class="mi" data-act="mdPreview">Markdown のプレビュー<span class="k">Ctrl+Shift+V</span></div>
+  <hr>
+  <div class="mi" data-act="edmode:code">エディタ: コード</div>
+  <div class="mi" data-act="edmode:visual">エディタ: ビジュアル</div>
+  <hr>
+  <div class="mi" data-act="theme:system">テーマ: システムに合わせる</div>
+  <div class="mi" data-act="theme:light">テーマ: ライト</div>
+  <div class="mi" data-act="theme:dark">テーマ: ダーク</div>
   <hr>
   <div class="mi" data-act="fit">PDF を幅に合わせる</div>
   <div class="mi" data-act="fontUp">エディタの文字を大きく</div>
@@ -83,6 +117,10 @@
   <div class="mi" data-act="item:rename">名前を変更</div>
   <div class="mi" data-act="item:download">ダウンロード</div>
   <div class="mi" data-act="item:history">このファイルの履歴</div>
+  <hr>
+  <div class="mi" data-act="item:copyRel">相対パスをコピー<span class="k">原稿のフォルダから</span></div>
+  <div class="mi" data-act="item:copyData">data からのパスをコピー<span class="k">Claude Code に渡す</span></div>
+  <div class="mi" data-act="item:copyAbs">パスをコピー<span class="k">絶対パス</span></div>
   <hr>
   <div class="mi" data-act="item:delete">削除</div>
 </div>
@@ -155,7 +193,26 @@
   </aside>
   <div class="vgrip" id="sideGrip" title="ドラッグで幅を変える"></div>
   <section id="editor">
-    <div id="tabs"></div>
+    <div id="edtop"><div id="tabs"></div></div>
+    <div id="edtool">
+      <button data-t="undo" title="元に戻す（Ctrl+Z）">↶</button><button data-t="redo" title="やり直す（Ctrl+Y）">↷</button>
+      <span class="tsep"></span>
+      <button data-t="heading" title="見出しの種類">Tт ▾</button>
+      <button data-t="bold" title="太字（\textbf、Ctrl+B）"><b>B</b></button><button data-t="italic" title="斜体（\textit、Ctrl+I）"><i>I</i></button>
+      <span class="tsep"></span>
+      <button data-t="math" title="数式（$…$）">√x</button><button data-t="symbol" title="記号を入れる">Ω</button>
+      <span class="tsep"></span>
+      <button data-t="link" title="リンク（\href）">🔗</button><button data-t="ref" title="図表・節の参照（\ref）">↗</button>
+      <button data-t="label" title="ラベル（\label）">🏷</button><button data-t="cite" title="文献の引用（\cite）">❝</button>
+      <button data-t="comment" title="行をコメントにする／戻す（%）">%</button>
+      <span class="tsep"></span>
+      <button data-t="figure" title="図を入れる（figure）">🖼</button><button data-t="table" title="表を入れる（tabular）">▦</button>
+      <button data-t="itemize" title="箇条書き（itemize）">•≡</button><button data-t="enumerate" title="番号付きの箇条書き（enumerate）">1≡</button>
+      <span class="tgrow"></span>
+      <span class="seg" id="edmode" title="コードのまま編集するか、見出しや太字を整えた表示で編集するか（Overleaf と同じ）">
+        <button data-m="code" class="on">コード</button><button data-m="visual">ビジュアル</button></span>
+      <button data-t="search" title="原稿の中を検索（Ctrl+Shift+F）">🔍</button>
+    </div>
     <div id="conflict"><span></span><button id="takeOuter">外の内容を読み込む</button><button id="keepMine">こちらで上書き</button></div>
     <div id="editbody">
       <div id="cmhost"></div>
@@ -194,7 +251,55 @@
     </div>
     <div id="viewer"><div id="pages"></div><div id="empty">コンパイル中…</div></div>
   </section>
+  <div class="vgrip" id="claudeGrip" title="ドラッグで幅を変える"></div>
+  <!-- 右のチャット欄（Claude Code と Codex。それぞれ VS Code の拡張と同じ並び）。中身は js/claude/、サーバ側は claude.py と codex.py -->
+  <section id="claude">
+    <div id="ccHead">
+      <img class="cclogo" id="ccLogo" src="/claude-asset/claude-logo.svg" alt="">
+      <span id="ccTitle">Untitled</span>
+      <button id="ccHistoryBtn" class="ccicon" title="Past conversations" data-pop></button>
+      <button id="ccNewBtn" class="ccicon" title="New conversation"></button>
+      <button id="ccCloseBtn" class="ccicon" title="閉じる（Ctrl+Shift+L）"></button>
+    </div>
+    <div id="ccLog"></div>
+    <div id="ccDock">
+      <div id="ccPerm" hidden></div>
+      <div id="ccInput">
+        <div id="ccAttach" hidden></div>
+        <div class="ccta"><textarea id="ccText" rows="1" placeholder="Ctrl Esc to focus or unfocus Claude" spellcheck="false"></textarea>
+          <button id="ccMic" class="ccicon" title="Voice input"></button></div>
+        <div class="ccbar">
+          <button id="ccPlus" class="ccicon sq" title="Add" data-pop></button>
+          <button id="ccSlash" class="ccicon" title="Show command menu (/)" data-pop></button>
+          <span id="ccUsageHost" hidden><button id="ccUsage" class="ccicon"></button><span id="ccUsageTip"></span></span>
+          <button id="ccModelBtn" class="ccpill" title="Switch model" data-pop></button>
+          <button id="ccCtxBtn" class="ccpill ctx" hidden></button>
+          <span class="grow"></span>
+          <button id="ccModeBtn" class="ccmode" title="Mode (Shift+Tab to switch)" data-pop></button>
+          <button id="ccSend" class="ccsend" title="Send (Enter)"></button>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="ccFileInput" multiple hidden>
+  </section>
 </main>
+
+<!-- 変更履歴の画面（Overleaf の History）。左にファイル、中央にその版の中身と違い、右に版の一覧 -->
+<section id="histpage">
+  <div id="hpTop"><button id="hpBack">← エディタに戻る</button><span id="hpTitle"></span></div>
+  <div id="hpBody">
+    <aside id="hpFiles"></aside>
+    <div id="hpMain">
+      <div id="hpHead"><span id="hpWhat">版を選ぶ</span><span id="hpCount"></span>
+        <button id="hpRestore" class="primary" hidden>この版に戻す</button></div>
+      <div id="hpText"></div>
+    </div>
+    <aside id="hpList">
+      <div class="seg" id="hpTabs"><button data-h="all" class="on">すべての履歴</button><button data-h="labels">ラベル</button></div>
+      <div id="hpEntries"></div>
+    </aside>
+  </div>
+</section>
 <div class="pop" id="errors"></div>
 <div class="menu" id="mCmtDl">
   <div class="mi" data-act="dl:annotated">PDF（コメント付き）</div>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- overleaf-compiler のアイコン。緑の角丸に、折り返しのある原稿と TeX の文字 -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2fae5f"/><stop offset="1" stop-color="#138a42"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="url(#g)"/>
+  <path d="M36 22h40l20 20v62a4 4 0 0 1-4 4H36a4 4 0 0 1-4-4V26a4 4 0 0 1 4-4z" fill="#ffffff"/>
+  <path d="M76 22v16a4 4 0 0 0 4 4h16z" fill="#cfe9d8"/>
+  <rect x="42" y="50" width="30" height="4" rx="2" fill="#9fcfb1"/>
+  <rect x="42" y="60" width="44" height="4" rx="2" fill="#9fcfb1"/>
+  <text x="64" y="96" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', serif" font-size="26" font-weight="700" fill="#138a42">T<tspan dy="6">E</tspan><tspan dy="-6">X</tspan></text>
+</svg>

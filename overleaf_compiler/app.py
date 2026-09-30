@@ -1,10 +1,14 @@
-"""画面の裏で動く本体。ワークスペースの置き場（data）と、いま開いている原稿を持ち、画面の要求を処理する。
+"""画面の裏で動く本体。ワークスペースの置き場（data）と、開いている原稿（複数）を持ち、画面の要求を処理する。
 
 HTTP の受け口は server.py。画面とのやり取りでは、パスはすべて data（または原稿のフォルダ）からの
 相対パスで渡し、絶対パスは出さない。書き換えられるのは開いた原稿の、data の1段目のフォルダの中だけ。
+
+原稿はブラウザのタブごとに開ける（タブの URL の ?p= が原稿）。原稿を見ているタブが無くなったら、
+その原稿の組版を止める。タブは状態の問い合わせにタブの番号（t）を付けてくるので、それで見ているかを数える。
 """
 from __future__ import annotations
 
+import itertools
 import json
 import mimetypes
 import os
@@ -13,9 +17,12 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from . import comments, pandoc, sync
+from .claude import Chat
+from .codex import CodexChat
 from .builder import Watcher
 from .history import History
 from .overleaf import export_zip, import_zip
@@ -25,6 +32,9 @@ from .search import search
 # serve が原稿を開いている間、原稿のフォルダに置く印（check が、組んでいるサーバを見つけるため）
 STATE_FILE = ".overleaf-compiler-serve.json"
 _BAD_NAME = re.compile(r'[\\/:*?"<>|]')
+VIEWER_TIMEOUT = 30   # この秒数だけ問い合わせの無いタブは、もう見ていないとみなす
+OPEN_GRACE = 60       # 開いてからこの秒数は、見ているタブが無くても組版を止めない（起動直後・開き直し）
+_ids = itertools.count(1)
 
 
 def _safe_name(name: str, fallback: str = "") -> str:
@@ -32,32 +42,48 @@ def _safe_name(name: str, fallback: str = "") -> str:
     return name or fallback
 
 
-class App:
-    """ワークスペースの置き場（data）と、いま開いている原稿（tex）を持つ。"""
+class Project:
+    """開いている原稿1つ。組版の常駐（Watcher）と変更履歴を持ち、エディタの要求を処理する。"""
 
-    def __init__(self, data: Path, port: int = 0, start: str = ""):
-        self.data = data.resolve()
-        self.port = port
-        self.start = start            # 一覧画面で最初に開くフォルダ（data からの相対パス）
-        self.tex: Path | None = None
-        self.watcher: Watcher | None = None
-        self.history: History | None = None
-        self.session = 0              # 原稿を開く・閉じるたびに増える。画面はこれで読み直す
-        self._lock = threading.Lock()
+    def __init__(self, tex: Path, data: Path, port: int):
+        self.tex, self.data = tex, data
+        self.session = next(_ids)     # 開くたびに変わる番号。画面はこれが変わったら作り直す
+        self.opened = time.monotonic()
+        self.viewers: dict[str, float] = {}   # 見ているタブの番号 → 最後に問い合わせた時刻
+        self.history = History(tex.parent)
+        self.watcher = Watcher(tex)
+        self.watcher.on_change = self._outside_changed
+        self.watcher.start()
+        self.chat = Chat(tex)          # 右のチャット欄（Claude Code）
+        self.codex = CodexChat(tex, revert=self.revert_since)    # 右のチャット欄（Codex）
+        (tex.parent / STATE_FILE).write_text(json.dumps({"pid": os.getpid(), "port": port, "main": tex.name}))
+        # まだ履歴に無いファイルは、今の中身を最初の版として残す（裏で）
+        files = [tex.parent / f["path"] for f in list_tree(tex) if not f["dir"]]
+        threading.Thread(target=self.history.baseline, args=(files,), daemon=True).start()
+
+    def stop(self) -> None:
+        self.watcher.stop()
+        self.chat.close()
+        self.codex.close()
+        (self.tex.parent / STATE_FILE).unlink(missing_ok=True)
+
+    def seen(self, tab: str | None) -> None:
+        if tab:
+            self.viewers[tab] = time.monotonic()
+
+    def watched(self) -> bool:
+        now = time.monotonic()
+        self.viewers = {t: s for t, s in self.viewers.items() if now - s < VIEWER_TIMEOUT}
+        return bool(self.viewers) or now - self.opened < OPEN_GRACE
 
     # ---- 範囲 ----
     @property
     def root(self) -> Path:
         """書き換えてよい範囲（project.edit_root）。"""
-        return edit_root(self._need(), self.data)
-
-    def _need(self) -> Path:
-        if not self.tex:
-            raise sync.SyncError("原稿が開かれていない")
-        return self.tex
+        return edit_root(self.tex, self.data)
 
     def _proj(self) -> Path:
-        return self._need().parent
+        return self.tex.parent
 
     def _path(self, rel: str) -> Path:
         """原稿のフォルダからの相対パス（ツリーやタブのパス）を、書き換えてよい範囲の中のパスにする。"""
@@ -75,92 +101,17 @@ class App:
             raise sync.SyncError(f"{rel} は原稿のフォルダの外")
         return p
 
-    def _data_path(self, rel: str) -> Path:
-        p = (self.data / rel).resolve() if rel else self.data
-        if p != self.data and self.data not in p.parents:
-            raise ProjectError(f"{rel} は data の外")
-        return p
-
-    # ---- 一覧画面 ----
-    def browse(self, q: dict) -> dict:
-        return browse(self.data, q.get("path", ""))
-
-    def mkdir(self, body: dict) -> dict:
-        name = _safe_name(body.get("name", ""))
-        if not name:
-            raise sync.SyncError("名前が空")
-        d = self._data_path(body.get("path", "")) / name
-        if d.exists():
-            raise sync.SyncError(f"{name} は既にある")
-        d.mkdir(parents=True)
-        return {"path": str(d.relative_to(self.data))}
-
-    def import_(self, path: str, name: str, data: bytes) -> dict:
-        """ブラウザから受け取った zip を、一覧で開いているフォルダに展開する。同名があれば _2, _3 … を付ける。"""
-        base = self._data_path(path)
-        stem = _safe_name(Path(name).stem, "overleaf")
-        dest, n = base / stem, 2
-        while dest.exists():
-            dest, n = base / f"{stem}_{n}", n + 1
-        with tempfile.NamedTemporaryFile(suffix=".zip") as tmp:
-            tmp.write(data)
-            tmp.flush()
-            mains = import_zip(Path(tmp.name), dest)
-        return {"dir": str(dest.relative_to(self.data)), "mains": len(mains)}
-
-    def rename_txt(self, body: dict) -> dict:
-        p = self._data_path(body["file"])
-        top = self.data / p.relative_to(self.data).parts[0]
-        return {"tex": str(rename_to_tex(p, top).relative_to(self.data))}
-
-    # ---- 原稿を開く・閉じる ----
-    def open(self, tex: Path) -> None:
-        tex = tex.resolve()
-        if tex.suffix != ".tex" or not tex.is_file():
-            raise sync.SyncError(f"{tex.name} は開けない")
-        with self._lock:
-            self._close()
-            self.tex, self.watcher = tex, Watcher(tex)
-            self.history = History(tex.parent)
-            self.watcher.on_change = self._outside_changed
-            self.watcher.start()
-            self.session += 1
-            (tex.parent / STATE_FILE).write_text(
-                json.dumps({"pid": os.getpid(), "port": self.port, "main": tex.name}))
-        # まだ履歴に無いファイルは、今の中身を最初の版として残す（裏で）
-        files = [tex.parent / f["path"] for f in list_tree(tex) if not f["dir"]]
-        threading.Thread(target=self.history.baseline, args=(files,), daemon=True).start()
-
-    def close_tex(self, _=None) -> dict:
-        with self._lock:
-            self._close()
-            self.session += 1
-        return self.info()
-
-    def _close(self) -> None:
-        if self.watcher:
-            self.watcher.stop()
-        if self.tex:
-            (self.tex.parent / STATE_FILE).unlink(missing_ok=True)
-        self.tex = self.watcher = self.history = None
-
-    def shutdown(self) -> None:
-        with self._lock:
-            self._close()
-
-    def info(self, _=None) -> dict:
+    def info(self, start: str) -> dict:
         t = self.tex
-        rel = None
-        if t:
-            rel = str(t.relative_to(self.data)) if t.is_relative_to(self.data) else t.name
-        return {"session": self.session, "start": self.start, "main": t.name if t else None,
-                "rel": rel, "has_pandoc": pandoc.available(),
+        rel = str(t.relative_to(self.data)) if t.is_relative_to(self.data) else t.name
+        return {"session": self.session, "start": start, "main": t.name, "rel": rel,
+                "has_pandoc": pandoc.available(),
                 # VS Code で開くためだけに使う。画面には出さない
-                "vscode_dir": str(t.parent) if t else None}
+                "vscode_dir": str(t.parent)}
 
     # ---- エディタ ----
     def tree(self, _=None) -> dict:
-        return {"main": self._need().name, "files": list_tree(self._need())}
+        return {"main": self.tex.name, "files": list_tree(self.tex)}
 
     def read(self, q: dict) -> dict:
         p = self._path(q["path"])
@@ -173,12 +124,11 @@ class App:
         except sync.Conflict as c:  # 外で直されていた。今の内容を返し、画面に選ばせる
             return {"conflict": True, "path": self._rel(p), "text": c.text, "mtime": c.mtime}
         self._record(p, "browser")
-        if self.watcher:
-            self.watcher.poke()   # 更新の確認を待たずに組み始める
+        self.watcher.poke()   # 更新の確認を待たずに組み始める
         return r
 
     def _record(self, p: Path, kind: str) -> None:
-        if self.history and p.is_file() and p.is_relative_to(self._proj()):
+        if p.is_file() and p.is_relative_to(self._proj()):
             self.history.record(str(p.relative_to(self._proj())), p.read_bytes(), kind)
 
     def _outside_changed(self, paths: list[Path]) -> None:
@@ -188,10 +138,8 @@ class App:
                 self._record(p, "outside")
 
     def status(self, q=None) -> dict:
-        if not self.watcher:
-            return {"session": self.session, "open": False}
         st = {"session": self.session, "open": True, **self.watcher.status(),
-              "comments_mtime": comments.mtime(self._need())}
+              "comments_mtime": comments.mtime(self.tex)}
         # 開いているタブのファイルの更新時刻。外（VS Code など）で直されたら画面が読み直す
         if q and q.get("files"):
             st["mtimes"] = {}
@@ -206,8 +154,7 @@ class App:
 
     def goto_source(self, q: dict) -> dict:
         """PDF の位置 → ソースのファイルと行（PDF をダブルクリックしたとき、← ボタン）。"""
-        tex = self._need()
-        src, line = sync.pdf_to_source(tex.with_suffix(".pdf"), int(q["page"]), float(q["x"]), float(q["y"]))
+        src, line = sync.pdf_to_source(self.tex.with_suffix(".pdf"), int(q["page"]), float(q["x"]), float(q["y"]))
         src = sync.inside(src, self.root)
         if q.get("text"):
             line = sync.refine_line(src, line, q["text"], self.root)
@@ -215,49 +162,36 @@ class App:
 
     def goto_pdf(self, q: dict) -> dict:
         """ソースの行 → PDF 上の位置（→ ボタン）。"""
-        boxes = sync.source_to_pdf(self._need().with_suffix(".pdf"), self._path(q["path"]), int(q["line"]))
+        boxes = sync.source_to_pdf(self.tex.with_suffix(".pdf"), self._path(q["path"]), int(q["line"]))
         if not boxes:
             raise sync.SyncError("この行は PDF に出ていない（コメントや設定の行など）")
         return {"boxes": boxes}
 
     def replace(self, body: dict) -> dict:
         """PDF 上で選んだ文字列を書き換える（Overleaf には無い操作）。場所は SyncTeX で引く。"""
-        tex = self._need()
-        src, line = sync.pdf_to_source(tex.with_suffix(".pdf"), int(body["page"]),
+        src, line = sync.pdf_to_source(self.tex.with_suffix(".pdf"), int(body["page"]),
                                        float(body["x"]), float(body["y"]))
         src = sync.inside(src, self.root)
         r = sync.replace_in_source(src, line, body["old"], body["new"], self.root)
         self._record(src, "browser")
-        if self.watcher:
-            self.watcher.poke()
+        self.watcher.poke()
         return {"path": self._rel(src), **r}
 
-    def settle(self, body: dict) -> dict:
-        """check から呼ばれる。body の原稿を組んでいれば、呼ばれた時点までの変更を組み終えるまで待って状態を返す。
-
-        別の原稿を開いている（組んでいない）なら NOT_SERVING。check はそのとき自分で組む。
-        待っている間にリコンパイルで組版をやり直したら、やり直した方を待つ。
-        """
+    def settle(self) -> dict:
+        """呼ばれた時点までの変更を組み終えるまで待って状態を返す。待っている間にリコンパイルしたら、やり直した方を待つ。"""
         while True:
             w = self.watcher
-            if not w or not self.tex or self.tex != Path(body["tex"]).resolve():
-                raise sync.SyncError("NOT_SERVING")
-            if body.get("wait") is False:   # 組んでいるかどうかだけを知りたい（build・clean）
-                return w.status()
             st = w.settle()
             if self.watcher is w:
                 return st
 
     def recompile(self, _=None) -> dict:
         """最初から組み直す（latexmk -g）。"""
-        tex = self._need()
-        with self._lock:
-            on_change = self.watcher.on_change if self.watcher else None
-            if self.watcher:
-                self.watcher.stop()
-            self.watcher = Watcher(tex)
-            self.watcher.on_change = on_change
-            self.watcher.start()
+        old = self.watcher
+        old.stop()
+        self.watcher = Watcher(self.tex)
+        self.watcher.on_change = old.on_change
+        self.watcher.start()
         return {"ok": True}
 
     def raw(self, rel: str) -> tuple[bytes, str]:
@@ -269,12 +203,11 @@ class App:
 
     # ---- コメント（PDF に付ける。Acrobat の注釈に当たる）----
     def comments_list(self, _=None) -> dict:
-        tex = self._need()
-        return {"comments": comments.list_comments(tex, self.root), "mtime": comments.mtime(tex)}
+        return {"comments": comments.list_comments(self.tex, self.root), "mtime": comments.mtime(self.tex)}
 
     def comment(self, body: dict) -> dict:
         """コメントの追加・編集・返信・解決・削除・取り込み。action で分ける。"""
-        tex, act = self._need(), body["action"]
+        tex, act = self.tex, body["action"]
         if act == "add":
             return {"comment": comments.add(tex, self.root, body)}
         if act == "import":
@@ -318,8 +251,7 @@ class App:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
         self._record(p, "upload")
-        if self.watcher:
-            self.watcher.poke()
+        self.watcher.poke()
         return {"path": self._rel(p)}
 
     def rename_file(self, body: dict) -> dict:
@@ -328,10 +260,10 @@ class App:
             raise sync.SyncError(f"{body['from']} が無い")
         if dst.exists():
             raise sync.SyncError(f"{body['to']} は既にある")
-        if src == self._need():
+        if src == self.tex:
             raise sync.SyncError("主文書の名前は変えない（Overleaf の設定と合わなくなる）")
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if src.is_file() and self.history:
+        if src.is_file():
             self.history.record(self._rel(src), src.read_bytes(), "delete")
         src.rename(dst)
         self._record(dst, "rename")
@@ -340,43 +272,46 @@ class App:
     def delete(self, body: dict) -> dict:
         """消す前に中身を履歴に残す（履歴から戻せる）。フォルダは中のファイルを全部残してから消す。"""
         p = self._in_proj(body["path"])
-        if p == self._proj() or p == self._need():
+        if p == self._proj() or p == self.tex:
             raise sync.SyncError("原稿のフォルダと主文書は消せない")
         if not p.exists():
             raise sync.SyncError(f"{body['path']} が無い")
         files = [f for f in p.rglob("*") if f.is_file()] if p.is_dir() else [p]
         for f in files:
-            if self.history and f.stat().st_size < 50 * 1024 * 1024:
+            if f.stat().st_size < 50 * 1024 * 1024:
                 self.history.record(self._rel(f), f.read_bytes(), "delete")
         shutil.rmtree(p) if p.is_dir() else p.unlink()
         return {"deleted": len(files)}
 
     # ---- 検索・文字数・履歴 ----
     def search(self, q: dict) -> dict:
-        files = [f["path"] for f in list_tree(self._need()) if not f["dir"] and f["editable"]]
+        files = [f["path"] for f in list_tree(self.tex) if not f["dir"] and f["editable"]]
         return search(self._proj(), files, q.get("q", ""), q.get("case") == "1", q.get("regex") == "1",
                       q.get("word") == "1")
 
     def wordcount(self, _=None) -> dict:
-        tex = self._need()
-        r = subprocess.run(["texcount", "-inc", "-utf8", "-japanese", "-sum", "-merge", tex.name],
-                           cwd=tex.parent, capture_output=True, text=True, errors="replace")
+        r = subprocess.run(["texcount", "-inc", "-utf8", "-japanese", "-sum", "-merge", self.tex.name],
+                           cwd=self.tex.parent, capture_output=True, text=True, errors="replace")
         text = r.stdout.strip()
         m = re.search(r"Sum count: (\d+)", text)
         return {"sum": int(m.group(1)) if m else None, "text": text}
 
     def history_list(self, q: dict) -> dict:
-        return {"entries": self.history.list(q.get("path") or None) if self.history else []}
+        return {"entries": self.history.list(q.get("path") or None)}
 
     def history_diff(self, q: dict) -> dict:
-        if not self.history:
-            raise sync.SyncError("履歴が無い")
         return self.history.diff(q["id"])
+
+    def history_view(self, q: dict) -> dict:
+        """履歴の画面：その版のファイル全体と、1つ前の版との違い。"""
+        return self.history.view(q["id"])
+
+    def history_label(self, body: dict) -> dict:
+        e = self.history.set_label(body["id"], (body.get("name") or "").strip() or None)
+        return {"entry": {k: e[k] for k in ("id", "path", "time")}, "labels": e.get("labels", [])}
 
     def history_restore(self, body: dict) -> dict:
         """その版の中身に戻す（今の中身も履歴に残るので、戻したことも取り消せる）。"""
-        if not self.history:
-            raise sync.SyncError("履歴が無い")
         e = self.history.find(body["id"])
         if body.get("before"):   # 「この変更の前に戻す」＝1つ前の版に戻す
             prev = self.history._prev(e)
@@ -394,13 +329,57 @@ class App:
         tmp.write_bytes(data)
         tmp.replace(p)
         self.history.record(e["path"], data, "restore")
-        if self.watcher:
-            self.watcher.poke()
+        self.watcher.poke()
         return {"path": e["path"]}
+
+    def revert_since(self, t: float) -> list[str]:
+        """時刻 t より後に外（Codex・VS Code など）で変わったファイルを、t の直前の版に戻す（チャット欄の巻き戻し）。
+        ブラウザで直した分は戻さない。戻す前の中身も履歴に残るので、戻したことも取り消せる。"""
+        changed = {e["path"] for e in self.history.entries if e["time"] > t and e["kind"] == "outside"}
+        done = []
+        for rel in sorted(changed):
+            before = next((e for e in reversed(self.history.entries) if e["path"] == rel and e["time"] <= t), None)
+            try:
+                p = self._in_proj(rel)
+            except sync.SyncError:
+                continue
+            if before is None:   # t のあとに作られたファイル。中身を履歴に残してから消す
+                if p.is_file():
+                    self._record(p, "outside")
+                    self.history.record(rel, None, "delete")
+                    p.unlink()
+                    done.append(rel)
+                continue
+            data = self.history.blob(before)
+            if data is None or (p.is_file() and p.read_bytes() == data):
+                continue
+            if p.is_file():
+                self._record(p, "outside")
+            p.parent.mkdir(parents=True, exist_ok=True)
+            tmp = p.with_name(p.name + ".overleaf-compiler-tmp")
+            tmp.write_bytes(data)
+            tmp.replace(p)
+            self.history.record(rel, data, "restore")
+            done.append(rel)
+        if done:
+            self.watcher.poke()
+        return done
+
+    # ---- 原稿の複製（Overleaf の Make a copy）----
+    def copy_project(self, body: dict) -> dict:
+        """原稿のフォルダを、同じ階層に別の名前で写す。組版の中間生成物と印のファイルは写さない。"""
+        name = _safe_name(body.get("name", "")) or f"{self._proj().name}_コピー"
+        dest = self._proj().parent / name
+        if dest.exists():
+            raise sync.SyncError(f"{name} は既にある")
+        skip = shutil.ignore_patterns(STATE_FILE, "*.aux", "*.log", "*.fls", "*.fdb_latexmk", "*.synctex.gz", "*.dvi",
+                                      "*.bbl", "*.blg", "*.bcf", "*.run.xml", "*.out", "*.toc", "*.xdv", ".git")
+        shutil.copytree(self._proj(), dest, ignore=skip)
+        return {"tex": str((dest / self.tex.name).relative_to(self.data))}
 
     # ---- ダウンロード ----
     def export(self, fmt: str) -> tuple[str, bytes, str]:
-        tex = self._need()
+        tex = self.tex
         if fmt == "comments":
             md = comments.to_markdown(comments.list_comments(tex, self.root), tex.name)
             return f"{tex.stem}_コメント.md", md.encode(), "text/markdown; charset=utf-8"
@@ -410,3 +389,151 @@ class App:
                 export_zip(tex.parent, out)
                 return out.name, out.read_bytes(), "application/zip"
         return pandoc.export(tex, fmt)   # Word・Markdown・HTML
+
+
+class App:
+    """ワークスペースの置き場（data）と、開いている原稿（主文書のパス → Project）を持つ。"""
+
+    def __init__(self, data: Path, port: int = 0, start: str = ""):
+        self.data = data.resolve()
+        self.port = port
+        self.start = start            # 一覧画面で最初に開くフォルダ（data からの相対パス）
+        self.projects: dict[Path, Project] = {}
+        self._lock = threading.Lock()
+        self._stopping = threading.Event()
+        threading.Thread(target=self._janitor, daemon=True).start()
+
+    def _data_path(self, rel: str) -> Path:
+        p = (self.data / rel).resolve() if rel else self.data
+        if p != self.data and self.data not in p.parents:
+            raise ProjectError(f"{rel} は data の外")
+        return p
+
+    # ---- どの原稿の要求か（画面は ?p= に data からの主文書の相対パスを付けてくる）----
+    def project(self, q: dict | None) -> Project:
+        rel = (q or {}).get("p")
+        if not rel:
+            raise sync.SyncError("原稿が開かれていない")
+        pr = self.projects.get(self._data_path(rel))
+        if not pr:
+            raise sync.SyncError("原稿が開かれていない")
+        pr.seen((q or {}).get("t"))
+        return pr
+
+    # ---- 一覧画面 ----
+    def browse(self, q: dict) -> dict:
+        return browse(self.data, q.get("path", ""))
+
+    def mkdir(self, body: dict) -> dict:
+        name = _safe_name(body.get("name", ""))
+        if not name:
+            raise sync.SyncError("名前が空")
+        d = self._data_path(body.get("path", "")) / name
+        if d.exists():
+            raise sync.SyncError(f"{name} は既にある")
+        d.mkdir(parents=True)
+        return {"path": str(d.relative_to(self.data))}
+
+    def import_(self, path: str, name: str, data: bytes) -> dict:
+        """ブラウザから受け取った zip を、一覧で開いているフォルダに展開する。同名があれば _2, _3 … を付ける。"""
+        base = self._data_path(path)
+        stem = _safe_name(Path(name).stem, "overleaf")
+        dest, n = base / stem, 2
+        while dest.exists():
+            dest, n = base / f"{stem}_{n}", n + 1
+        with tempfile.NamedTemporaryFile(suffix=".zip") as tmp:
+            tmp.write(data)
+            tmp.flush()
+            mains = import_zip(Path(tmp.name), dest)
+        return {"dir": str(dest.relative_to(self.data)), "mains": len(mains)}
+
+    def rename_txt(self, body: dict) -> dict:
+        p = self._data_path(body["file"])
+        top = self.data / p.relative_to(self.data).parts[0]
+        return {"tex": str(rename_to_tex(p, top).relative_to(self.data))}
+
+    # ---- 原稿を開く・閉じる ----
+    def open(self, tex: Path, tab: str | None = None) -> Project:
+        """原稿を開く。既に開いていれば（別のタブが見ている）、同じものを使う。"""
+        tex = tex.resolve()
+        if tex.suffix != ".tex" or not tex.is_file():
+            raise sync.SyncError(f"{tex.name} は開けない")
+        with self._lock:
+            pr = self.projects.get(tex)
+            if not pr:
+                pr = self.projects[tex] = Project(tex, self.data, self.port)
+            pr.seen(tab)
+            return pr
+
+    def open_api(self, body: dict) -> dict:
+        return self.open(self._data_path(body["tex"]), body.get("t")).info(self.start)
+
+    def close_tex(self, q: dict) -> dict:
+        """タブが原稿を閉じた（一覧へ戻った）。ほかに見ているタブが無ければ組版を止める。"""
+        with self._lock:
+            rel = q.get("p")
+            pr = self.projects.get(self._data_path(rel)) if rel else None
+            if pr:
+                pr.viewers.pop(q.get("t"), None)
+                pr.opened = 0   # 開いた直後の猶予も終わりにする
+                if not pr.watched():
+                    self._drop(pr)
+        return self.info({})
+
+    def rename_project(self, q: dict, body: dict) -> dict:
+        """原稿のフォルダの名前を変える（Overleaf の Rename）。組版を止めてから名前を変え、新しい名前で開き直す。"""
+        name = _safe_name(body.get("name", ""))
+        if not name:
+            raise sync.SyncError("名前が空")
+        with self._lock:
+            pr = self.project(q)
+            old = pr.tex.parent
+            dest = old.parent / name
+            if dest.exists():
+                raise sync.SyncError(f"{name} は既にある")
+            self._drop(pr)
+            old.rename(dest)
+            History.move(old, dest)   # 変更履歴も新しい名前へ引き継ぐ
+        return self.open(dest / pr.tex.name, q.get("t")).info(self.start)
+
+    def _drop(self, pr: Project) -> None:
+        pr.stop()
+        self.projects.pop(pr.tex, None)
+
+    def _janitor(self) -> None:
+        """見ているタブが無くなった原稿（タブを閉じた）の組版を止める。"""
+        while not self._stopping.wait(10):
+            with self._lock:
+                for pr in [p for p in self.projects.values() if not p.watched()]:
+                    self._drop(pr)
+
+    def shutdown(self) -> None:
+        self._stopping.set()
+        with self._lock:
+            for pr in list(self.projects.values()):
+                self._drop(pr)
+
+    def info(self, q: dict) -> dict:
+        try:
+            return self.project(q).info(self.start)
+        except (sync.SyncError, ProjectError):
+            return {"session": 0, "start": self.start, "main": None, "rel": None,
+                    "has_pandoc": pandoc.available(), "vscode_dir": None}
+
+    def status(self, q: dict) -> dict:
+        try:
+            return self.project(q).status(q)
+        except (sync.SyncError, ProjectError):
+            return {"session": 0, "open": False}
+
+    def settle(self, body: dict) -> dict:
+        """check から呼ばれる。body の原稿を組んでいれば、呼ばれた時点までの変更を組み終えるまで待って状態を返す。
+
+        その原稿を開いていない（組んでいない）なら NOT_SERVING。check はそのとき自分で組む。
+        """
+        pr = self.projects.get(Path(body["tex"]).resolve())
+        if not pr:
+            raise sync.SyncError("NOT_SERVING")
+        if body.get("wait") is False:   # 組んでいるかどうかだけを知りたい（build・clean）
+            return pr.watcher.status()
+        return pr.settle()

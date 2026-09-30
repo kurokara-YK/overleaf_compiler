@@ -1,5 +1,5 @@
 // 左のパネルのファイルツリー（Overleaf と同じ）。新規ファイル・新規フォルダ・アップロードと、各ファイルの ⋮ の操作
-import { $, api, post, enc, escapeHtml, dirname, store, ask, confirmBox, showToast, fail, bus } from "./util.mjs";
+import { $, api, post, enc, escapeHtml, dirname, store, ask, confirmBox, showToast, fail, bus, url } from "./util.mjs";
 import { info } from "./state.mjs";
 import { tabs, active, openTab, save, renderTabs, dropTabs } from "./editor.mjs";
 import { openMenu } from "./menu.mjs";
@@ -43,7 +43,7 @@ function renderTree() {
         openDirs.has(f.path) ? openDirs.delete(f.path) : openDirs.add(f.path);
         store.set("oc.openDirs", JSON.stringify([...openDirs])); renderTree();
       } else if (f.editable) openTab(f.path).catch(fail);
-      else window.open(`/raw?path=${enc(f.path)}`, "_blank");   // 画像などは別のタブで見る
+      else window.open(url(`/raw?path=${enc(f.path)}`), "_blank");   // 画像などは別のタブで見る
     };
     list.appendChild(d);
   }
@@ -91,11 +91,24 @@ tl.addEventListener("drop", (e) => {
   const dir = it ? (it.dataset.dir ? it.dataset.path : dirname(it.dataset.path)) : "";
   uploadFiles([...e.dataTransfer.files], dir);
 });
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {   // クリップボードの API が使えないとき
+    const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  showToast(`コピーした：${escapeHtml(text)}`, "ok", 2500);
+}
 export async function itemAct(a) {
   const p = itemPath;
   if (!p) return;
-  if (a === "download") return window.open(`/raw?path=${enc(p)}&download=1`, "_blank");
+  if (a === "download") return window.open(url(`/raw?path=${enc(p)}&download=1`), "_blank");
   if (a === "history") return showHistory("path:" + p);
+  if (a.startsWith("copy")) {   // VS Code の「パスのコピー」「相対パスのコピー」と同じ
+    const proj = dirname(info.rel || "");
+    const text = a === "copyRel" ? p : a === "copyData" ? `data/${proj ? proj + "/" : ""}${p}` : `${info.vscode_dir}/${p}`;
+    return copyText(text);
+  }
   if (a === "rename") {
     const to = await ask("名前を変更", "新しい名前（フォルダも変えられる）", p);
     if (!to || to === p) return;

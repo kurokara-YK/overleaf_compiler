@@ -1,13 +1,44 @@
 // メニューの項目（data-act）の操作。ファイル・編集・表示・ヘルプ、ファイルツリーの ⋮、コメントのダウンロード
-import { $, api, escapeHtml, modal, closeBtn, showToast, fail } from "./util.mjs";
+import { $, api, escapeHtml, modal, closeBtn, showToast, fail, url } from "./util.mjs";
 import { cm, saveAll, toggleMd, fontSize } from "./editor.mjs";
 import { setView, setLayout, toggleSide } from "./panels.mjs";
+import { toggleClaude } from "./claude/index.mjs";
 import { newFile, newFolder, itemAct } from "./tree.mjs";
 import { showHistory } from "./history.mjs";
 import { openSearch } from "./search.mjs";
 import { fitWidth } from "./pdf.mjs";
 import { recompile } from "./compile.mjs";
 import { downloadAnnotated } from "./comments/index.mjs";
+import { setTheme } from "./theme.mjs";
+import { setEdMode } from "./visual.mjs";
+import { headingAct } from "./toolbar.mjs";
+import { openHistory } from "./histpage.mjs";
+import { ask, post, tab, setTabProject, bus } from "./util.mjs";
+import { openMenu } from "./menu.mjs";
+import { info } from "./state.mjs";
+
+// 原稿のメニュー（ヘッダの原稿名）。Overleaf のプロジェクト名のメニューと同じ
+$("ptitle").onclick = (e) => { e.stopPropagation(); const r = $("ptitle").getBoundingClientRect(); openMenu("mProject", r.left, r.bottom + 4); };
+async function copyProject() {
+  const name = await ask("複製を作る", "新しい原稿のフォルダ名", `${$("ptname").textContent}_コピー`);
+  if (!name) return;
+  try {
+    const r = await post("/api/copy", { name });
+    const o = await post("/api/open", { tex: r.tex, t: tab.t });
+    setTabProject(o.rel); await bus.emit("reopen");
+    showToast(`「${escapeHtml(name)}」を作って開いた`, "ok");
+  } catch (e) { fail(e); }
+}
+async function renameProject() {
+  const name = await ask("名前を変更", "原稿のフォルダの新しい名前（Overleaf 側の名前は変わらない）", $("ptname").textContent);
+  if (!name || name === $("ptname").textContent) return;
+  try {
+    await saveAll();
+    const o = await post("/api/rename_project", { name });
+    setTabProject(o.rel, false); await bus.emit("reopen");
+    showToast(`「${escapeHtml(name)}」に名前を変えた`, "ok");
+  } catch (e) { fail(e); }
+}
 
 async function wordCount() {
   try {
@@ -24,11 +55,11 @@ async function wordCount() {
   } catch (e) { fail(e); }
 }
 function download(fmt) {
-  if (fmt === "pdf") { location.href = "/pdf?download=1"; return; }
+  if (fmt === "pdf") { location.href = url("/pdf?download=1"); return; }
   if (fmt === "annotated") return downloadAnnotated();
-  if (fmt === "comments") { location.href = "/export?format=comments"; return; }
+  if (fmt === "comments") { location.href = url("/export?format=comments"); return; }
   if (fmt !== "zip") showToast(`${fmt.toUpperCase()} に書き出している…（pandoc。数式や表は崩れることがある）`, "", 5000);
-  location.href = `/export?format=${fmt}`;
+  location.href = url(`/export?format=${fmt}`);
 }
 function shortcuts() {
   const rows = [["Ctrl+S", "今すぐ保存（入力は自動でも保存される）"], ["Ctrl+Enter", "リコンパイル"],
@@ -45,7 +76,10 @@ export async function runAct(a) {
     case "newFile": return newFile();
     case "newFolder": return newFolder();
     case "upload": return $("tUpload").click();
-    case "history": return showHistory("all");
+    case "history": return openHistory();
+    case "copyProject": return copyProject();
+    case "renameProject": return renameProject();
+    case "head": return headingAct(v);
     case "wordcount": return wordCount();
     case "dl": return download(v);
     case "recompile": return recompile();
@@ -56,7 +90,10 @@ export async function runAct(a) {
     case "search": return openSearch();
     case "save": return saveAll();
     case "layout": return setLayout(v);
+    case "theme": return setTheme(v);
+    case "edmode": return setEdMode(v);
     case "toggleSide": return toggleSide();
+    case "claude": return toggleClaude();
     case "comments": return setView("comments");
     case "mdPreview": return toggleMd();
     case "fit": return fitWidth();
