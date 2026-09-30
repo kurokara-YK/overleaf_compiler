@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from .claude import ClaudeError, WAIT, _last_sessions, LAST_SESSIONS
+from .claude import ClaudeError, WAIT, _last_sessions, set_last
 
 EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 # 承認のモード（拡張の「How should Codex actions be approved?」）→ app-server の設定
@@ -55,8 +55,9 @@ def _short_cmd(cmd: str) -> str:
 
 
 class CodexChat:
-    def __init__(self, tex: Path, revert=None):
+    def __init__(self, tex: Path, revert=None, key: str | None = None):
         self.tex = tex
+        self.key = key or f"codex:{tex}"   # 最後の会話を覚える名前（タブごとに違う。chats.py）
         self.revert = revert   # 時刻 → その時点のファイルに戻す（overleaf-compiler の変更履歴。app.Project.revert_since）
         self.cwd = tex.parent
         self.lock = threading.Condition()
@@ -309,23 +310,11 @@ class CodexChat:
                 p.kill()
 
     # ---- 原稿ごとの最後の会話 ----
-    def _key(self) -> str:
-        return f"codex:{self.tex}"
-
     def _restore(self) -> None:
-        self._restore_id = _last_sessions().get(self._key())
+        self._restore_id = _last_sessions().get(self.key)
 
     def _remember(self) -> None:
-        d = _last_sessions()
-        if self.thread:
-            d[self._key()] = self.thread
-        else:
-            d.pop(self._key(), None)
-        try:
-            LAST_SESSIONS.parent.mkdir(parents=True, exist_ok=True)
-            LAST_SESSIONS.write_text(json.dumps(d, ensure_ascii=False, indent=1))
-        except OSError:
-            pass
+        set_last(self.key, self.thread)
 
     # ---- 子プロセス（JSON-RPC）----
     def _alive(self) -> bool:

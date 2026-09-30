@@ -82,8 +82,9 @@ def split_ctx(text: str) -> tuple[str, str]:
 
 
 class Chat:
-    def __init__(self, tex: Path):
+    def __init__(self, tex: Path, key: str | None = None):
         self.tex = tex
+        self.key = key or str(tex)    # 最後の会話を覚える名前（タブごとに違う。chats.py）
         self.cwd = tex.parent
         self.lock = threading.Condition()
         self.events: list[dict] = []    # 画面へ渡す出来事。番号は events の添字 + 1
@@ -292,7 +293,7 @@ class Chat:
 
     # ---- 原稿ごとの最後の会話（開き直したら続きを出す。VS Code の拡張と同じ）----
     def _restore(self) -> None:
-        sid = _last_sessions().get(str(self.tex))
+        sid = _last_sessions().get(self.key)
         f = sessions_dir(self.cwd) / f"{sid}.jsonl" if sid else None
         if f and f.is_file():
             try:
@@ -302,18 +303,8 @@ class Chat:
                 pass
 
     def _remember(self) -> None:
-        d = _last_sessions()
-        if d.get(str(self.tex)) == self.session:
-            return
-        if self.session:
-            d[str(self.tex)] = self.session
-        else:
-            d.pop(str(self.tex), None)
-        try:
-            LAST_SESSIONS.parent.mkdir(parents=True, exist_ok=True)
-            LAST_SESSIONS.write_text(json.dumps(d, ensure_ascii=False, indent=1))
-        except OSError:
-            pass
+        if _last_sessions().get(self.key) != self.session:
+            set_last(self.key, self.session)
 
     def close(self) -> None:
         p, self.proc = self.proc, None
@@ -558,12 +549,32 @@ class Chat:
 LAST_SESSIONS = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "overleaf-compiler" / "claude-sessions.json"
 
 
+_LAST_LOCK = threading.Lock()
+
+
 def _last_sessions() -> dict:
-    """原稿（主文書の絶対パス）→ 最後に使った会話の番号。"""
+    """タブの名前（原稿の絶対パスと番号）→ 最後に使った会話の番号。ほかに tabs:<原稿> にタブの並び。"""
     try:
         return json.loads(LAST_SESSIONS.read_text())
     except (OSError, ValueError):
         return {}
+
+
+def set_last(key: str, value) -> None:
+    """1つの値を書き換える（None なら消す）。複数の会話が同時に書くので、読み書きをまとめて排他する。"""
+    with _LAST_LOCK:
+        d = _last_sessions()
+        if value is None:
+            d.pop(key, None)
+        else:
+            d[key] = value
+        try:
+            LAST_SESSIONS.parent.mkdir(parents=True, exist_ok=True)
+            tmp = LAST_SESSIONS.with_suffix(".tmp")
+            tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1))
+            tmp.replace(LAST_SESSIONS)
+        except OSError:
+            pass
 
 
 def _user_text(content) -> str:

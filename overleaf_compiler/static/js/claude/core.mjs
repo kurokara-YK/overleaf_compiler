@@ -5,12 +5,14 @@ import { $, api, post, escapeHtml, store } from "../util.mjs";
 // サーバ（claude.py）の Chat と同じ内容を持つ。start の答えで埋まる
 export const st = {
   engine: store.get("oc.engine", "claude") === "codex" ? "codex" : "claude",
+  chat: null,   // 今のタブの番号（index.mjs）
   opts: { model: "default", effort: "medium", mode: "auto", thinking: true },
   models: [], commands: [], account: {}, fast: null,
   busy: false, session: null, title: "", epoch: -1, started: false,
 };
-export const cc = (name, body) => post(`/api/${st.engine}/${name}`, body);
-export const ccGet = (name, q = "") => api(`/api/${st.engine}/${name}${q}`);
+// 今のタブ（st.chat）の会話に話す。サーバの chats.py がタブごとの Claude・Codex の会話へ振り分ける
+export const cc = (name, body) => post(`/api/chat/${name}?c=${encodeURIComponent(st.chat || "")}`, body);
+export const ccGet = (name, q = "") => api(`/api/chat/${name}?c=${encodeURIComponent(st.chat || "")}${q}`);
 export const isCodex = () => st.engine === "codex";
 export const NAME = () => isCodex() ? "Codex" : "Claude";
 // 前回の選択を覚えておく名前（Claude は oc.cc.〜、Codex は oc.cx.〜）と、それぞれの最初の値

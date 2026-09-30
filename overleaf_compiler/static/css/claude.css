@@ -254,3 +254,24 @@ ul.ccdata { margin: 0; padding-left: 1.2em; }
 .ccmode span { max-width: 104px; overflow: hidden; text-overflow: ellipsis; }
 .ccpill.ctx { flex-shrink: 2; max-width: 120px; }
 #ccModelBtn { flex-shrink: 0; }
+
+/* ---- 上のタブ（会話ごと。Claude と Codex を混ぜて並べ、同時に動かせる）---- */
+#ccHead { gap: 2px; padding: 0 4px 0 4px; }
+#ccTabs { flex: 1; min-width: 0; display: flex; align-items: stretch; height: 100%; overflow-x: auto; scrollbar-width: none; }
+#ccTabs::-webkit-scrollbar { display: none; }
+.cctab { position: relative; display: flex; align-items: center; gap: 6px; min-width: 64px; max-width: 170px; padding: 0 4px 0 10px;
+  color: var(--c-dim); cursor: pointer; border-right: 1px solid var(--c-border); user-select: none; flex: 0 1 auto; }
+.cctab:hover { background: var(--c-hover); color: var(--c-fg); }
+.cctab.on { color: var(--c-bright); background: var(--c-input); box-shadow: inset 0 -2px 0 var(--c-orange); }
+#claude.codex .cctab.on { box-shadow: inset 0 -2px 0 var(--c-bright); }
+.cctab .tlogo { width: 14px; height: 14px; flex: none; }
+:root[data-theme="light"] .cctab .tlogo.cx { filter: invert(1); }
+.cctab .tt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.cctab .st { width: 7px; height: 7px; border-radius: 50%; flex: none; display: none; }
+.cctab.busy .st { display: block; background: var(--c-ok); animation: ccpulse 1.2s ease-in-out infinite; }
+.cctab.unread:not(.busy) .st { display: block; background: var(--c-orange); }
+.cctab .tx { flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--c-dim);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; visibility: hidden; }
+.cctab .tx .ico { width: 12px; height: 12px; }
+.cctab:hover .tx, .cctab.on .tx { visibility: visible; }
+.cctab .tx:hover { background: var(--c-pill-hover); color: var(--c-fg); }

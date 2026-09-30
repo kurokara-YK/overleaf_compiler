@@ -255,10 +255,9 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <!-- 右のチャット欄（Claude Code と Codex。それぞれ VS Code の拡張と同じ並び）。中身は js/claude/、サーバ側は claude.py と codex.py -->
   <section id="claude">
     <div id="ccHead">
-      <img class="cclogo" id="ccLogo" src="/claude-asset/claude-logo.svg" alt="">
-      <span id="ccTitle">Untitled</span>
+      <div id="ccTabs"></div>
+      <button id="ccNewBtn" class="ccicon" title="New conversation (new tab)"></button>
       <button id="ccHistoryBtn" class="ccicon" title="Past conversations" data-pop></button>
-      <button id="ccNewBtn" class="ccicon" title="New conversation"></button>
       <button id="ccCloseBtn" class="ccicon" title="閉じる（Ctrl+Shift+L）"></button>
     </div>
     <div id="ccLog"></div>

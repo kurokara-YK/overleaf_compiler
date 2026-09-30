@@ -288,9 +288,11 @@ VS Code の Claude Code 拡張と同じ並び・同じ操作です．Claude Code
 | モデル | Default・Opus・Sonnet・Fable・Haiku など（Claude Code が使えるもの）と Effort（考える深さ） |
 | モード | Manual（毎回確認）・Edit automatically・Plan・Auto |
 | 🎤 | 音声入力（ブラウザの音声認識．Vivaldi では使えないことがあり，Chrome なら使えます） |
-| 🕘 / ⊕ | 過去の会話を開く（Resume）／新しい会話 |
+| 上のタブ | 会話ごとのタブ．Claude と Codex を混ぜて並べられ，**同時に動かせる**．裏で返答中のタブは緑の点，終わったタブはオレンジの点．× か中クリックで閉じる．原稿を開き直しても同じタブが戻る |
+| 🕘 / ⊕ | 過去の会話を開く（Resume）／新しいタブで新しい会話 |
 | 自分の発言を押す | その発言の前まで戻す（Rewind．コードと会話・会話だけ・コードだけ） |
 
+返答が伸びると，一番下を自動で追いかけます（上へスクロールして読んでいる間は追いかけず，一番下へ戻すとまた追いかける．VS Code と同じ）．
 Claude がファイルを直すと，自動で組み直され，エディタと PDF に出ます．Manual や Auto で確認が要るときは，
 入力欄の代わりに「Allow Claude to Edit …?」が出るので，**1 Yes / 2 Yes, allow all edits during this session / 3 No** から選びます．
 

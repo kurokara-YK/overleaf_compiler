@@ -102,12 +102,13 @@ def make_handler(app: App):
                    "/api/comments": "comments_list"}
             if u.path in per:
                 return self._api(lambda arg: getattr(app.project(q), per[u.path])(arg), q)
-            # 右のチャット欄。/api/claude/… は Claude Code、/api/codex/… は Codex
-            for eng, attr in (("claude", "chat"), ("codex", "codex")):
-                if u.path == f"/api/{eng}/events":   # 新しい出来事が出るまで待って返す
-                    return self._api(lambda _: getattr(app.project(q), attr).wait_events(q))
-                if u.path == f"/api/{eng}/sessions":
-                    return self._api(lambda _: getattr(app.project(q), attr).sessions())
+            # 右のチャット欄。?c= のタブの会話（chats.py）。新しい出来事が出るまで待って返す
+            if u.path == "/api/chat/events":
+                return self._api(lambda _: app.project(q).chats.get(q.get("c")).wait_events(q))
+            if u.path == "/api/chat/sessions":
+                return self._api(lambda _: app.project(q).chats.get(q.get("c")).sessions())
+            if u.path == "/api/chat/tabs":
+                return self._api(lambda _: app.project(q).chats.list())
             if u.path.startswith("/claude-asset/"):   # チャット欄のアイコン。VS Code の拡張に入っているものを使う（同梱しない）
                 f = claude.asset(u.path[len("/claude-asset/"):])
                 if f:
@@ -148,18 +149,19 @@ def make_handler(app: App):
                    "/api/history_label": "history_label", "/api/copy": "copy_project"}
             if u.path in per:
                 return self._api(lambda arg: getattr(app.project(q), per[u.path])(arg), body)
-            # 右のチャット欄（claude.Chat）。/api/claude/<名前> を同じ名前のメソッドへ
+            # 右のチャット欄。/api/chat/<名前>?c=<タブ> をそのタブの会話の同じ名前のメソッドへ
+            if u.path in ("/api/chat/new", "/api/chat/close"):
+                return self._api(lambda arg: getattr(app.project(q).chats, u.path[len("/api/chat/"):])(arg), body)
             chat = {"send", "stop", "reset", "start", "set", "permission", "control", "resume", "rewind", "terminal",
                     "compact", "fork"}
-            for eng, attr in (("claude", "chat"), ("codex", "codex")):
-                name = u.path[len(f"/api/{eng}/"):]
-                if u.path.startswith(f"/api/{eng}/") and name in chat:
-                    def call(arg, attr=attr, name=name):
-                        fn = getattr(getattr(app.project(q), attr), name, None)
-                        if fn is None:
-                            raise ClaudeError(f"{eng} では {name} は使えない")
-                        return fn(arg)
-                    return self._api(call, body)
+            name = u.path[len("/api/chat/"):]
+            if u.path.startswith("/api/chat/") and name in chat:
+                def call(arg):
+                    fn = getattr(app.project(q).chats.get(q.get("c")), name, None)
+                    if fn is None:
+                        raise ClaudeError(f"この会話では {name} は使えない")
+                    return fn(arg)
+                return self._api(call, body)
             self._send(404, b"not found", "text/plain")
 
     return Handler

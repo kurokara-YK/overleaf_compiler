@@ -18,6 +18,7 @@ export const users = [];  // 発言（Rewind の一覧に使う）{ el, text, uu
 const transcript = [];    // 書き出し用（Export conversation）
 
 export function clearLog() {
+  away = false;
   log().replaceChildren(welcome()); cur = null; tools.clear(); lastUser = null; users.length = 0; transcript.length = 0;
   spinner(false);
 }
@@ -32,17 +33,63 @@ function welcome() {
     開いているファイルとカーソルの位置（選んでいれば選んだ行）を添えて送ります。直したファイルは自動で組み直されます。</div>`;
   return d;
 }
-function atBottom() { const l = log(); return l.scrollHeight - l.scrollTop - l.clientHeight < 80; }
 function add(cls, html = "", before = null) {
   $("ccWelcome")?.remove();
-  const stick = atBottom();
   const d = document.createElement("div");
   d.className = cls; d.innerHTML = html;
   log().insertBefore(d, before || $("ccSpin"));
-  if (stick) log().scrollTop = log().scrollHeight;
   return d;
 }
-const follow = () => { if (atBottom()) log().scrollTop = log().scrollHeight; };
+
+// ---- 下へ追いかける（VS Code の Claude Code と同じ仕組み）----
+// 一番下から MD px 以内なら、中身が増えるたびに一番下へ移る。人が上へスクロールしたら（ホイール・キー・スクロールバー）
+// 「離れた」として追いかけるのをやめ、また一番下の近くまで戻したら追いかける。送ったときは必ず一番下へ戻る
+const MD = 50;
+let away = false;
+const dist = (l) => l.scrollHeight - l.scrollTop - l.clientHeight;
+function follow() { const l = log(); if (!away && dist(l) > 0) l.scrollTop = l.scrollHeight; }
+export function toBottom() { away = false; const l = log(); l.scrollTop = l.scrollHeight; }
+// ホイールを回した所が、内側でスクロールできる箱（長い出力・差分）なら、そちらのスクロールとみなす
+function innerScrolls(target, up) {
+  for (let el = target instanceof Element ? target : null; el && el !== log(); el = el.parentElement) {
+    if (el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY)
+        && (up ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1)) return true;
+  }
+  return false;
+}
+(() => {
+  const l = log();
+  let lastTop = l.scrollTop, lastH = l.scrollHeight, dir = null, dirAt = 0, touchY = null;
+  const up = () => { if (l.scrollTop > 0) { away = true; dir = "up"; dirAt = Date.now(); } };
+  const down = () => { dir = "down"; dirAt = Date.now(); if (dist(l) < MD) away = false; };
+  l.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || innerScrolls(e.target, e.deltaY < 0)) return;
+    if (e.deltaY < 0) up(); else down();
+  }, { passive: true });
+  l.addEventListener("touchstart", (e) => { touchY = e.touches[0]?.clientY ?? null; }, { passive: true });
+  l.addEventListener("touchmove", (e) => {
+    const y = e.touches[0]?.clientY;
+    if (y === undefined || touchY === null || y === touchY) return;
+    const goingUp = y > touchY; touchY = y;
+    if (!innerScrolls(e.target, goingUp)) { if (goingUp) up(); else down(); }
+  }, { passive: true });
+  l.addEventListener("keydown", (e) => {
+    if (["ArrowUp", "PageUp", "Home"].includes(e.key)) up();
+    else if (["ArrowDown", "PageDown", "End"].includes(e.key)) down();
+  });
+  l.addEventListener("scroll", () => {   // スクロールバーを動かしたとき
+    const top = l.scrollTop, d = dist(l), grew = l.scrollHeight - lastH;
+    const recent = Date.now() - dirAt < 300 ? dir : null;
+    const byContent = recent === null && grew > 0 && Math.abs(top - lastTop - grew) <= 1;   // 追いかけて動いただけ
+    const wentUp = top < lastTop, wentDown = top > lastTop;
+    lastTop = top; lastH = l.scrollHeight; dir = null;
+    if (wentUp) { if (grew < 0 && d > 1 && recent !== "up") return; away = d > 1 || recent === "up"; }
+    else if (wentDown && d < MD && recent !== "up" && !byContent) away = false;
+  }, { passive: true });
+  // 中身が変わったら（返答が伸びた・道具の結果が出た・たたんだ箱を開いた）、離れていなければ一番下へ
+  new MutationObserver(() => requestAnimationFrame(follow)).observe(l, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "open"] });
+  new ResizeObserver(() => follow()).observe(l);
+})();
 
 // ---- 返答中の表示（✻ Thinking… esc to interrupt）----
 let verbTimer = 0;
@@ -88,7 +135,7 @@ export function show(e) {
       const u = { el: d, text: e.text, uuid: e.uuid || null, t: e.t };
       d.onclick = () => import("./dialogs.mjs").then((m) => m.rewindAt(u));
       users.push(u); lastUser = u; transcript.push(`## User\n\n${e.text}\n`);
-      log().scrollTop = log().scrollHeight;
+      toBottom();   // 送ったら必ず一番下へ
       break;
     }
     case "uuid": if (lastUser && !lastUser.uuid) lastUser.uuid = e.uuid; break;

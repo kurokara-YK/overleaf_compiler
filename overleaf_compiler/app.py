@@ -21,8 +21,7 @@ import time
 from pathlib import Path
 
 from . import comments, pandoc, sync
-from .claude import Chat
-from .codex import CodexChat
+from .chats import ChatTabs
 from .builder import Watcher
 from .history import History
 from .overleaf import export_zip, import_zip
@@ -54,8 +53,7 @@ class Project:
         self.watcher = Watcher(tex)
         self.watcher.on_change = self._outside_changed
         self.watcher.start()
-        self.chat = Chat(tex)          # 右のチャット欄（Claude Code）
-        self.codex = CodexChat(tex, revert=self.revert_since)    # 右のチャット欄（Codex）
+        self.chats = ChatTabs(tex, revert=self.revert_since)   # 右のチャット欄のタブ（Claude Code・Codex）
         (tex.parent / STATE_FILE).write_text(json.dumps({"pid": os.getpid(), "port": port, "main": tex.name}))
         # まだ履歴に無いファイルは、今の中身を最初の版として残す（裏で）
         files = [tex.parent / f["path"] for f in list_tree(tex) if not f["dir"]]
@@ -63,8 +61,7 @@ class Project:
 
     def stop(self) -> None:
         self.watcher.stop()
-        self.chat.close()
-        self.codex.close()
+        self.chats.close_all()
         (self.tex.parent / STATE_FILE).unlink(missing_ok=True)
 
     def seen(self, tab: str | None) -> None:

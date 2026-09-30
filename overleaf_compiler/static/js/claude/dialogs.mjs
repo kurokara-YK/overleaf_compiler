@@ -20,7 +20,7 @@ export function actions() {
   add("Context", "Clear conversation", "Start a new conversation", newConversation);
   add("Context", "Rewind", "Restore code and conversation to an earlier point", rewindList);
   add("Context", "Export conversation", "Copy the conversation as plain text or save it to a file", exportConversation);
-  add("Context", "New conversation", "Start a new conversation", newConversation, { filterOnly: true });
+  add("Context", "New conversation", "Open a new conversation in a new tab", () => import("./index.mjs").then((m) => m.newTab()), { filterOnly: true });
   add("Context", "Resume conversation", "Continue a previous conversation", () => openHistory(), { filterOnly: true });
   add("Model", "Switch model…", "Change the AI model", async () => (await composer()).openModelMenu(), { right: () => `<span class="dim">${escapeHtml(modelLabel())}</span>` });
   add("Model", "Account & usage…", "View account info and usage", accountUsage);
