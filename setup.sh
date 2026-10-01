@@ -12,6 +12,7 @@ if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && python3 -c "import PySide6" 2>/d
 fi
 
 echo "画面を使えないため、コマンドライン版で導入します。"
-echo "（画面版を使うには: pip install --user PySide6）"
+echo "（画面版を使うには PySide6 が要る。Ubuntu なら  sudo apt install python3-pyside6.qtwidgets"
+echo "  pip を使うなら  pip install --user --break-system-packages PySide6 ）"
 echo
 exec python3 -m overleaf_compiler.install install "$@"

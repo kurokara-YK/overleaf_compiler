@@ -27,7 +27,7 @@ WAIT = 25   # 長いポーリングで待つ秒数
 CONTROLS = {"initialize", "list_models", "get_usage", "get_status", "mcp_status", "mcp_toggle", "mcp_reconnect",
             "get_context_usage", "list_permission_rules", "get_hooks_listing", "get_memory_dialog",
             "get_skills_dialog", "get_settings", "get_session_cost", "rewind_files", "apply_flag_settings",
-            "get_sandbox_dialog", "reload_plugins"}
+            "get_sandbox_dialog", "reload_plugins", "update_settings"}
 
 
 class ClaudeError(Exception):
@@ -125,9 +125,48 @@ class Chat:
             except ClaudeError:
                 init = {}
             models = self._ask({"subtype": "list_models"}, 30).get("models") or init.get("models", [])
-            self.info = {"commands": init.get("commands", []), "models": models, "account": init.get("account", {}),
-                         "fast": init.get("fast_mode_state"), "agents": init.get("agents", [])}
-        return {**self.state(), **self.info}
+            # スラッシュコマンドから Skills を除く（VS Code の拡張と同じく、／の一覧に Skills は出さない）
+            try:
+                skills = self._ask({"subtype": "get_skills_dialog"}, 30).get("skills", [])
+            except ClaudeError:
+                skills = []
+            names = {s.get("name") for s in skills} | {s.get("display_name") for s in skills} | _known_skills()
+            self.all_commands = init.get("commands", [])
+            self.info = {"commands": _without_skills(self.all_commands, names),
+                         "models": models, "account": init.get("account", {}),
+                         "fast": init.get("fast_mode_state"), "agents": init.get("agents", []),
+                         "remote": {"available": init.get("remote_control_available") is not False,
+                                    "default": bool(init.get("remote_control_auto_enable"))}}
+        return {**self.state(), **self.info, "settings": self._settings()}
+
+    def _settings(self) -> dict:
+        """／メニューの切り替え（Switch models when a message is flagged・Enable Remote Control for all sessions）の今の値。"""
+        try:
+            eff = self._ask({"subtype": "get_settings"}, 20).get("effective", {})
+        except ClaudeError:
+            eff = {}
+        return {"switchModelsOnFlag": eff.get("switchModelsOnFlag", True),
+                "remoteControlAtStartup": eff.get("remoteControlAtStartup", self.info.get("remote", {}).get("default", False))}
+
+    def account(self, body: dict) -> dict:
+        """Switch account（別のアカウントでログイン）と Sign out（このパソコンの Claude からサインアウト）。"""
+        exe = find_claude()
+        if not exe:
+            raise ClaudeError("claude コマンドが見つからない")
+        if body.get("action") == "logout":
+            r = subprocess.run([exe, "auth", "logout"], capture_output=True, text=True, timeout=60)
+            self.close()
+            self.info = {}
+            if r.returncode:
+                raise ClaudeError((r.stderr or r.stdout or "サインアウトできなかった").strip()[:300])
+            return {"ok": True}
+        # ログインはブラウザでの確認が要るので、端末で claude auth login を開く
+        from .launcher import open_terminal
+        if not open_terminal([exe, "auth", "login"]):
+            raise ClaudeError("端末を開けなかった。端末で  claude auth login  を実行すること")
+        self.close()
+        self.info = {}
+        return {"ok": True}
 
     def set(self, body: dict) -> dict:
         """モデル・許可のモード・考える深さ・Thinking を変える。モデルとモードはすぐ、深さと Thinking は次に送るとき。"""
@@ -282,13 +321,12 @@ class Chat:
 
     def terminal(self, _=None) -> dict:
         """この会話を端末の Claude Code で開く（Open Claude in Terminal）。"""
+        from .launcher import open_terminal
         exe = find_claude()
-        term = next((t for t in ("x-terminal-emulator", "gnome-terminal", "konsole", "xterm") if shutil.which(t)), None)
-        if not exe or not term:
-            raise ClaudeError("端末か claude コマンドが見つからない")
-        cmd = [exe] + (["--resume", self.session] if self.session else [])
-        args = [term, "--"] + cmd if term == "gnome-terminal" else [term, "-e"] + cmd
-        subprocess.Popen(args, cwd=self.cwd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not exe:
+            raise ClaudeError("claude コマンドが見つからない")
+        if not open_terminal([exe] + (["--resume", self.session] if self.session else []), self.cwd):
+            raise ClaudeError("端末を開けなかった")
         return self.state()
 
     # ---- 原稿ごとの最後の会話（開き直したら続きを出す。VS Code の拡張と同じ）----
@@ -452,9 +490,15 @@ class Chat:
         if t == "system":
             if sub == "init":
                 self.session = o.get("session_id") or self.session
+                # 会話の始めに来る Skill の一覧（最初から入っている Skill も載る）を覚え、／の一覧から外す
+                if o.get("skills") and _remember_skills(o["skills"]) and getattr(self, "all_commands", None):
+                    self.info["commands"] = _without_skills(self.all_commands, _known_skills())
+                    extra = [{"k": "commands", "commands": self.info["commands"]}]
+                else:
+                    extra = []
                 self._remember()
                 return [{"k": "init", "model": o.get("model", ""), "mode": o.get("permissionMode", ""),
-                         "session": self.session}]
+                         "session": self.session}] + extra
             if sub == "session_title_changed" and o.get("title"):
                 self.title = o["title"]
                 return [{"k": "title", "title": self.title}]
@@ -547,6 +591,37 @@ class Chat:
 
 
 LAST_SESSIONS = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "overleaf-compiler" / "claude-sessions.json"
+
+
+SKILLS_CACHE = LAST_SESSIONS.parent / "claude-skills.json"
+
+
+def _known_skills() -> set[str]:
+    """前に会話の始めで知った Skill の名前（get_skills_dialog には最初から入っている Skill が載らないため）。"""
+    try:
+        return set(json.loads(SKILLS_CACHE.read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
+def _remember_skills(names: list[str]) -> bool:
+    """Skill の名前を覚える。新しく増えたら True。"""
+    known = _known_skills()
+    new = known | {n for n in names if isinstance(n, str)} | {n.split(":", 1)[1] for n in names if isinstance(n, str) and ":" in n}
+    if new == known:
+        return False
+    try:
+        SKILLS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        SKILLS_CACHE.write_text(json.dumps(sorted(new), ensure_ascii=False))
+    except OSError:
+        pass
+    return True
+
+
+def _without_skills(commands: list[dict], skills: set[str]) -> list[dict]:
+    """スラッシュコマンドから Skill（と内部用の __ で始まるもの）を除く。"""
+    return [c for c in commands if c.get("name") not in skills and not c.get("name", "").startswith("__")
+            and not any(a in skills for a in c.get("aliases") or [])]
 
 
 _LAST_LOCK = threading.Lock()

@@ -17,6 +17,7 @@ import { loadComments, resetComments, cmtMtime, hideCompose } from "./comments/i
 import { runAct } from "./actions.mjs";
 import "./theme.mjs";
 import "./visual.mjs";
+import "./zoom.mjs";
 import "./toolbar.mjs";
 import { openHistory, closeHistory } from "./histpage.mjs";
 import { setBrowsePath, showHomeAt } from "./home.mjs";

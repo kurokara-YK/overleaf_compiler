@@ -31,6 +31,7 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <span class="crumb" id="crumb"></span>
   <button class="ptitle editor-only" id="ptitle" title="原稿のメニュー（ダウンロード・複製・名前の変更）"><span id="ptname"></span> ▾</button>
   <button class="ghost editor-only" id="histBtn" title="変更履歴（Overleaf の History）">🕘 履歴</button>
+  <button class="ghost home-only" id="reloadBtn" title="一覧を読み直す（外で増えた・消えたものも出る）">⟳ 再読み込み</button>
   <span class="seg editor-only" id="layout" title="レイアウト">
     <button data-l="editor">エディタ</button><button data-l="both" class="on">両方</button><button data-l="pdf">PDF</button>
   </span>
@@ -113,6 +114,12 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <div class="mi" data-act="shortcuts">キーボードショートカット</div>
   <div class="mi" data-act="about">この画面について</div>
 </div>
+<div class="menu" id="mHomeItem">
+  <div class="mi" data-act="hitem:download">⤓ ダウンロード<span class="k" id="mHomeZipNote">.zip</span></div>
+  <div class="mi" data-act="hitem:rename">名前を変更</div>
+  <hr>
+  <div class="mi" data-act="hitem:delete">削除<span class="k">ごみ箱へ</span></div>
+</div>
 <div class="menu" id="mItem">
   <div class="mi" data-act="item:rename">名前を変更</div>
   <div class="mi" data-act="item:download">ダウンロード</div>
@@ -131,14 +138,14 @@ try { const t = localStorage.getItem("oc.theme") || "system";
     <h1 id="homeTitle">data</h1>
     <div class="sub" id="homeSub"></div>
     <div class="drop" id="drop">Overleaf の <strong>File → ダウンロード → Download as source (.zip)</strong> で保存した zip を
-      ここへドロップ（またはクリックして選ぶ）すると、<strong id="dropWhere">このフォルダ</strong>に展開する</div>
+      ここへドロップ（またはクリックして、ダウンロードから zip か展開済みのフォルダを選ぶ）すると、<strong id="dropWhere">このフォルダ</strong>に取り込む</div>
     <input type="file" id="zipInput" accept=".zip" hidden>
     <div class="row">
       <input id="newName" placeholder="新しいフォルダの名前" autocomplete="off">
       <button id="newBtn">フォルダを作る</button>
     </div>
     <div id="homeMsg" class="msgline"></div>
-    <input id="q" placeholder="絞り込む（フォルダ名・ファイル名）" autocomplete="off" style="width:100%;margin-bottom:12px">
+    <input id="q" placeholder="絞り込む（下の階層まで探す。フォルダ名・原稿名・主文書の名前）" autocomplete="off" style="width:100%;margin-bottom:12px">
     <div id="list"></div>
   </div>
 </section>

@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 from . import comments, pandoc, sync
@@ -25,7 +26,7 @@ from .chats import ChatTabs
 from .builder import Watcher
 from .history import History
 from .overleaf import export_zip, import_zip
-from .project import ProjectError, browse, edit_root, list_tree, rename_to_tex
+from .project import ProjectError, browse, edit_root, is_main, list_folders, list_tree, rename_to_tex, search_tree
 from .search import search
 
 # serve が原稿を開いている間、原稿のフォルダに置く印（check が、組んでいるサーバを見つけるため）
@@ -419,7 +420,129 @@ class App:
 
     # ---- 一覧画面 ----
     def browse(self, q: dict) -> dict:
+        if q.get("q", "").strip():   # 絞り込み：そのフォルダの下の階層をすべて探す
+            return search_tree(self.data, q.get("path", ""), q["q"].strip())
         return browse(self.data, q.get("path", ""))
+
+    # ---- 一覧の項目の ⋮（ダウンロード・名前の変更・削除）----
+    def _item(self, rel: str) -> Path:
+        p = self._data_path(rel)
+        if p == self.data or not p.is_dir():
+            raise sync.SyncError(f"{rel} は扱えない")
+        return p
+
+    def _close_inside(self, p: Path) -> None:
+        """そのフォルダの中で開いている原稿を閉じる（組版を止める）。"""
+        with self._lock:
+            for pr in [pr for t, pr in self.projects.items() if t.is_relative_to(p)]:
+                self._drop(pr)
+
+    def item_zip(self, q: dict) -> tuple[str, bytes, str]:
+        """原稿なら Overleaf に入れられる zip（組んだ PDF・中間生成物を除く）、ただのフォルダなら中身をそのまま zip にする。"""
+        p = self._item(q.get("path", ""))
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / f"{p.name}.zip"
+            if [t for t in p.glob("*.tex") if is_main(t)]:
+                export_zip(p, out)
+            else:
+                with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+                    for f in sorted(p.rglob("*")):
+                        rel = f.relative_to(p)
+                        if f.is_file() and not any(x.startswith(".") for x in rel.parts):
+                            z.write(f, (Path(p.name) / rel).as_posix())
+            return out.name, out.read_bytes(), "application/zip"
+
+    def item_rename(self, body: dict) -> dict:
+        p = self._item(body.get("path", ""))
+        name = _safe_name(body.get("name", ""))
+        if not name:
+            raise sync.SyncError("名前が空")
+        dest = p.parent / name
+        if dest.exists():
+            raise sync.SyncError(f"{name} は既にある")
+        projects = [Path(f["dir"]) for f in list_folders(p) if f["mains"]] + ([Path(".")] if list(p.glob("*.tex")) else [])
+        self._close_inside(p)
+        p.rename(dest)
+        for rel in projects:   # 中の原稿の変更履歴も新しい場所へ引き継ぐ
+            History.move(p / rel, dest / rel)
+        return {"path": str(dest.relative_to(self.data))}
+
+    def item_delete(self, body: dict) -> dict:
+        """ごみ箱へ移す（gio trash。ファイルマネージャのごみ箱から戻せる）。"""
+        p = self._item(body.get("path", ""))
+        self._close_inside(p)
+        if shutil.which("gio") and subprocess.run(["gio", "trash", str(p)], capture_output=True).returncode == 0:
+            return {"trash": True}
+        trash = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "Trash"
+        (trash / "files").mkdir(parents=True, exist_ok=True)
+        (trash / "info").mkdir(parents=True, exist_ok=True)
+        dest, n = trash / "files" / p.name, 2
+        while dest.exists():
+            dest, n = trash / "files" / f"{p.name}.{n}", n + 1
+        (trash / "info" / f"{dest.name}.trashinfo").write_text(
+            f"[Trash Info]\nPath={p}\nDeletionDate={time.strftime('%Y-%m-%dT%H:%M:%S')}\n")
+        shutil.move(str(p), dest)
+        return {"trash": True}
+
+    # ---- 取り込む元を選ぶ窓（ホームフォルダの中。最初はダウンロード）----
+    @staticmethod
+    def _downloads() -> Path:
+        try:
+            d = subprocess.run(["xdg-user-dir", "DOWNLOAD"], capture_output=True, text=True, timeout=3).stdout.strip()
+            if d and Path(d).is_dir():
+                return Path(d)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home()
+
+    def _in_home(self, path: str) -> Path:
+        home = Path.home().resolve()
+        p = Path(path).expanduser().resolve() if path else self._downloads().resolve()
+        if p != home and home not in p.parents:
+            raise sync.SyncError("ホームフォルダの外は選べない")
+        return p
+
+    def fs_list(self, q: dict) -> dict:
+        p = self._in_home(q.get("dir", ""))
+        if not p.is_dir():
+            raise sync.SyncError(f"{p.name} はフォルダではない")
+        home = Path.home().resolve()
+        entries = []
+        for c in p.iterdir():
+            if c.name.startswith("."):
+                continue
+            try:
+                if c.is_dir():
+                    tex = [t for t in list(c.glob("*.tex"))[:40] if is_main(t)]
+                    entries.append({"name": c.name, "path": str(c), "kind": "dir", "project": bool(tex),
+                                    "main": tex[0].name if tex else "", "mtime": c.stat().st_mtime})
+                elif c.suffix.lower() == ".zip":
+                    entries.append({"name": c.name, "path": str(c), "kind": "zip", "size": c.stat().st_size,
+                                    "mtime": c.stat().st_mtime})
+            except OSError:
+                continue
+        entries.sort(key=lambda e: -e["mtime"])   # ダウンロードは新しいものから
+        rel = "~" if p == home else "~/" + str(p.relative_to(home))
+        return {"dir": str(p), "label": rel, "parent": str(p.parent) if p != home else None,
+                "downloads": str(self._downloads()), "home": str(home), "entries": entries}
+
+    def fs_import(self, body: dict) -> dict:
+        """選んだ zip を展開する、または展開済みのフォルダを写して取り込む（一覧で開いているフォルダへ）。"""
+        src = self._in_home(body.get("src", ""))
+        if src == self.data or self.data in src.parents or src in self.data.parents:
+            raise sync.SyncError("data の中のものは取り込めない（もう一覧にある）")
+        base = self._data_path(body.get("path", ""))
+        if src.is_file() and src.suffix.lower() == ".zip":
+            return self.import_(body.get("path", ""), src.name, src.read_bytes())
+        if not src.is_dir():
+            raise sync.SyncError(f"{src.name} は zip でもフォルダでもない")
+        stem = _safe_name(src.name, "overleaf")
+        dest, n = base / stem, 2
+        while dest.exists():
+            dest, n = base / f"{stem}_{n}", n + 1
+        shutil.copytree(src, dest, ignore=shutil.ignore_patterns(".git", "__pycache__", "node_modules"))
+        mains = [t for t in dest.rglob("*.tex") if is_main(t)]
+        return {"dir": str(dest.relative_to(self.data)), "mains": len(mains)}
 
     def mkdir(self, body: dict) -> dict:
         name = _safe_name(body.get("name", ""))

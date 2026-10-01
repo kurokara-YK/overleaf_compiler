@@ -1,0 +1,34 @@
+% overleaf-compiler のサンプル原稿（LuaLaTeX）。
+% Overleaf の「Download as source (.zip)」で落とした原稿と同じ形にしてある。
+% 章は sections/、図は figures/、文献は references.bib に分けている。
+\documentclass[a4paper,11pt]{ltjsarticle}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage[hidelinks]{hyperref}
+
+\title{overleaf-compiler のサンプル原稿}
+\author{overleaf-compiler}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+  この原稿は，overleaf-compiler の使い方を試すためのサンプルである．
+  章ごとのファイル分割，図，表，数式，相互参照，文献の引用といった，
+  Overleaf の原稿でよく使う要素を一通り含めている．
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_method}
+\input{sections/03_results}
+\input{sections/04_conclusion}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

@@ -289,13 +289,12 @@ class CodexChat:
         return {**self.state(), "prompt": ev.get("text", ""), "files": files}
 
     def terminal(self, _=None) -> dict:
+        from .launcher import open_terminal
         exe = find_codex()
-        term = next((t for t in ("x-terminal-emulator", "gnome-terminal", "konsole", "xterm") if shutil.which(t)), None)
-        if not exe or not term:
-            raise ClaudeError("端末か codex コマンドが見つからない")
-        cmd = [exe, "resume", self.thread] if self.thread else [exe]
-        args = [term, "--"] + cmd if term == "gnome-terminal" else [term, "-e"] + cmd
-        subprocess.Popen(args, cwd=self.cwd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not exe:
+            raise ClaudeError("codex コマンドが見つからない")
+        if not open_terminal([exe, "resume", self.thread] if self.thread else [exe], self.cwd):
+            raise ClaudeError("端末を開けなかった")
         return self.state()
 
     def close(self) -> None:

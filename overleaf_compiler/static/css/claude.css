@@ -275,3 +275,6 @@ ul.ccdata { margin: 0; padding-left: 1.2em; }
 .cctab .tx .ico { width: 12px; height: 12px; }
 .cctab:hover .tx, .cctab.on .tx { visibility: visible; }
 .cctab .tx:hover { background: var(--c-pill-hover); color: var(--c-fg); }
+
+/* 拡大・縮小（zoom.mjs。Ctrl+Shift+ー / Ctrl+ー / Ctrl+0）。欄の中身と浮かぶメニューを同じ倍率にする */
+#ccHead, #ccLog, #ccDock, #claude > .ccpop { zoom: var(--cc-zoom, 1); }

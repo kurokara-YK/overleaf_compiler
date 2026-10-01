@@ -102,10 +102,12 @@ export function showPop(el, anchor, { align = "left", onClose, key } = {}) {
   $("claude").append(el);
   const box = $("claude").getBoundingClientRect(), r = anchor.getBoundingClientRect();
   const inBox = $("ccInput").getBoundingClientRect();
-  el.style.bottom = `${box.bottom - inBox.top + 6}px`;
-  if (align === "full") { el.style.left = `${inBox.left - box.left}px`; el.style.right = `${box.right - inBox.right}px`; }
-  else if (align === "right") el.style.right = `${Math.max(8, box.right - r.right)}px`;
-  else el.style.left = `${Math.max(8, r.left - box.left)}px`;
+  // チャット欄を拡大しているとき（zoom.mjs）、浮かぶメニューも同じ倍率なので、位置を倍率で割る
+  const z = parseFloat(getComputedStyle($("claude")).getPropertyValue("--cc-zoom")) || 1;
+  el.style.bottom = `${(box.bottom - inBox.top + 6) / z}px`;
+  if (align === "full") { el.style.left = `${(inBox.left - box.left) / z}px`; el.style.right = `${(box.right - inBox.right) / z}px`; }
+  else if (align === "right") el.style.right = `${Math.max(8, box.right - r.right) / z}px`;
+  else el.style.left = `${Math.max(8, r.left - box.left) / z}px`;
   openPop = { el, onClose, key };
   return el;
 }

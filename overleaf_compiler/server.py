@@ -6,10 +6,10 @@
 from __future__ import annotations
 
 import json
+import os
 import mimetypes
 import signal
 import threading
-import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -91,7 +91,9 @@ def make_handler(app: App):
                 return self._send(200, data, ctype, extra=extra)
             if u.path == "/export":
                 return self._file(lambda: app.project(q).export(q.get("format", "zip")))
-            routes = {"/api/info": app.info, "/api/status": app.status, "/api/browse": app.browse}
+            if u.path == "/api/item_zip":   # 一覧の項目の ⋮ → ダウンロード
+                return self._file(lambda: app.item_zip(q))
+            routes = {"/api/info": app.info, "/api/status": app.status, "/api/browse": app.browse, "/api/fs_list": app.fs_list}
             if u.path in routes:
                 return self._api(routes[u.path], q)
             # 原稿ごとの要求（?p= の原稿の Project が処理する）
@@ -139,7 +141,8 @@ def make_handler(app: App):
             if u.path == "/api/rename_project":
                 return self._api(lambda b: app.rename_project(q, b), body)
             routes = {"/api/open": app.open_api, "/api/rename_txt": app.rename_txt, "/api/mkdir": app.mkdir,
-                      "/api/settle": app.settle}
+                      "/api/settle": app.settle, "/api/item_rename": app.item_rename, "/api/item_delete": app.item_delete,
+                      "/api/fs_import": app.fs_import}
             if u.path in routes:
                 return self._api(routes[u.path], body)
             # 原稿ごとの要求（?p= の原稿の Project が処理する）
@@ -153,7 +156,7 @@ def make_handler(app: App):
             if u.path in ("/api/chat/new", "/api/chat/close"):
                 return self._api(lambda arg: getattr(app.project(q).chats, u.path[len("/api/chat/"):])(arg), body)
             chat = {"send", "stop", "reset", "start", "set", "permission", "control", "resume", "rewind", "terminal",
-                    "compact", "fork"}
+                    "compact", "fork", "account"}
             name = u.path[len("/api/chat/"):]
             if u.path.startswith("/api/chat/") and name in chat:
                 def call(arg):
@@ -167,7 +170,9 @@ def make_handler(app: App):
     return Handler
 
 
-def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: bool) -> None:
+def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: bool, app_window: bool = False) -> None:
+    """app_window なら、アプリのウィンドウ（専用のブラウザ）で開き、Ctrl+C でウィンドウも閉じる。
+    ウィンドウを閉じたら、サーバも終える（アプリと同じ）。"""
     app = App(data, start=start)
     httpd = None
     for p in range(port, port + 20):  # 使用中なら次の番号
@@ -184,18 +189,27 @@ def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: boo
     if tex:
         pr = app.open(tex)
         url += "?p=" + quote(pr.info(app.start)["rel"])
-    # kill（SIGTERM）で止められても latexmk を残さない
+    # kill（SIGTERM）で止められても latexmk を残さない。Ctrl+C（SIGINT）は、無視する設定で起動されても必ず受け取る
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))
-    print(f"overleaf-compiler: http://127.0.0.1:{httpd.server_port}/   （Ctrl+C で終了）")
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    windowed = False
+    if open_browser and app_window:
+        windowed = launcher.open_window(url)
+        if windowed:   # ウィンドウを閉じたら、サーバも終える（serve_forever から抜けて、下の finally へ）
+            launcher.watch_window(httpd.shutdown)
+    elif open_browser:
+        threading.Timer(0.5, lambda: launcher.open_tab(url)).start()
+    print(f"overleaf-compiler: http://127.0.0.1:{httpd.server_port}/   "
+          f"（{'Ctrl+C かウィンドウを閉じると終了' if windowed else 'Ctrl+C で終了'}）")
     if tex:
         print(f"        原稿 {tex.name}")
-    if open_browser:
-        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        if windowed:
+            launcher.close_windows()
         launcher.clear_server()
         app.shutdown()
         httpd.server_close()

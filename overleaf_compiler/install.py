@@ -327,7 +327,7 @@ def uninstall(opts: dict | None = None, progress: Progress | None = None) -> Non
         link.unlink()
         _log(progress, f"削除: {link}")
     # サーバの記録と設定だけ消す。変更履歴（STATE/history）は選んだときだけ
-    for p in (STATE / "server.json", STATE / "server.log", STATE / "claude-sessions.json"):
+    for p in (STATE / "server.json", STATE / "server.log", STATE / "claude-sessions.json", STATE / "claude-skills.json"):
         if p.exists():
             p.unlink()
             _log(progress, f"削除: {p}")

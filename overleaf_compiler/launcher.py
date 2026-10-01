@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -47,6 +48,10 @@ def server_info() -> dict | None:
 
 
 def write_server(port: int, data: Path) -> None:
+    """裏で動いているサーバとして記録する。ほかに生きているサーバが記録されていれば、上書きしない
+    （別の置き場で起動した2つ目のサーバが、アプリの一覧から開くサーバを奪わないように）。"""
+    if server_info():
+        return
     STATE.mkdir(parents=True, exist_ok=True)
     SERVER.write_text(json.dumps({"pid": os.getpid(), "port": port, "data": str(data)}))
 
@@ -105,20 +110,81 @@ def _default_browser() -> list[str] | None:
     for key, names in CHROMIUM.items():
         if key in d:
             for n in names:
-                if p := shutil.which(n):
+                p = shutil.which(n)
+                # Snap のブラウザは、専用のプロフィール（--user-data-dir）を自分の箱の外に作れず起動しない。タブで開く
+                if p and not os.path.realpath(p).startswith("/snap/"):
                     return [p]
     return None
 
 
-def open_window(url: str, tab: bool = False) -> None:
+TAB_BROWSERS = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "firefox", "vivaldi-stable",
+                "brave-browser", "microsoft-edge"]
+
+
+def open_tab(url: str) -> bool:
+    """ふつうのブラウザのタブで開く。xdg-open → gio → 見つかったブラウザ の順に試し、1つでも動けば True。
+    （Python の webbrowser に任せると、環境によっては何も開かないことがあるため、自分で順に試す）"""
+    tries = []
+    if os.environ.get("BROWSER"):
+        tries.append([os.environ["BROWSER"].split(":")[0], url])
+    tries += [["xdg-open", url], ["gio", "open", url], ["sensible-browser", url]]
+    tries += [[b, url] for b in TAB_BROWSERS]
+    for cmd in tries:
+        if not shutil.which(cmd[0]):
+            continue
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            continue
+        try:
+            if p.wait(timeout=3) != 0:   # すぐ失敗して終わったら次を試す（xdg-open は開いたらすぐ 0 で終わる）
+                continue
+        except subprocess.TimeoutExpired:
+            pass                         # ブラウザ本体が起動して動き続けている
+        return True
+    print(f"\n  ブラウザを自動で開けなかった。次の URL をブラウザで開くこと:\n\n    {url}\n", file=sys.stderr)
+    return False
+
+
+def open_window(url: str, tab: bool = False) -> bool:
+    """アプリのウィンドウ（専用のブラウザ）で開く。タブで開いたときは False（閉じたことを見張れない）。"""
     b = None if tab or config().get("window") == "tab" else _default_browser()
-    if b:
-        PROFILE.mkdir(parents=True, exist_ok=True)
-        cmd = [*b, f"--user-data-dir={PROFILE}", f"--class={WM_CLASS}", "--no-first-run", "--no-default-browser-check",
-               f"--app={url}"]
-    else:
-        cmd = ["xdg-open", url]
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    if not b:
+        open_tab(url)
+        return False
+    PROFILE.mkdir(parents=True, exist_ok=True)
+    cmd = [*b, f"--user-data-dir={PROFILE}", f"--class={WM_CLASS}", "--no-first-run", "--no-default-browser-check",
+           f"--app={url}"]
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        code = p.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        return True                      # 専用のブラウザが動いている
+    except OSError:
+        code = 1
+    if code == 0 and _browser_pid():     # すでに動いていた専用のブラウザに渡して、すぐ終わった
+        return True
+    open_tab(url)                        # アプリのウィンドウで開けなかった。ふつうのタブで開く
+    return False
+
+
+def watch_window(on_close) -> None:
+    """アプリのウィンドウ（専用のブラウザ）が閉じられたら on_close を呼ぶ（端末から起動したとき、サーバも終える）。"""
+    def run():
+        for _ in range(200):   # ウィンドウが開くまで待つ（最大 20 秒）
+            if _browser_pid():
+                break
+            time.sleep(0.1)
+        else:
+            return
+        gone = 0
+        while True:
+            time.sleep(1)
+            gone = gone + 1 if not _browser_pid() else 0
+            if gone >= 2:
+                on_close()
+                return
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _browser_pid() -> int | None:
@@ -126,6 +192,9 @@ def _browser_pid() -> int | None:
     try:
         pid = int(os.readlink(PROFILE / "SingletonLock").rsplit("-", 1)[1])
         os.kill(pid, 0)
+        # 終わったのに後始末されていないプロセス（ゾンビ）は、もう動いていないとみなす
+        if " Z " in f" {Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[-1]} ":
+            return None
         return pid
     except (OSError, ValueError, IndexError):
         return None
@@ -145,6 +214,29 @@ def close_windows() -> bool:
             return True
     os.kill(pid, signal.SIGKILL)
     return True
+
+
+# 端末（cmd を中で動かす書き方）。Ubuntu 26.04 では標準の端末が Ptyxis になる見込み。上から順に、動いたものを使う
+TERMINALS = [("x-terminal-emulator", ["-e"]), ("ptyxis", ["--new-window", "--"]), ("gnome-terminal", ["--"]),
+             ("kgx", ["--"]), ("konsole", ["-e"]), ("xfce4-terminal", ["-x"]), ("xterm", ["-e"])]
+
+
+def open_terminal(cmd: list[str], cwd: Path | str | None = None) -> bool:
+    """新しい端末の窓で cmd を動かす（Open Claude in Terminal・Switch account）。すぐ失敗した端末は飛ばして次を試す。"""
+    for term, flag in TERMINALS:
+        if not shutil.which(term):
+            continue
+        try:
+            p = subprocess.Popen([term, *flag, *cmd], cwd=cwd, start_new_session=True,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if p.wait(timeout=2) != 0:
+                continue
+        except subprocess.TimeoutExpired:
+            pass
+        except OSError:
+            continue
+        return True
+    return False
 
 
 def _notify(msg: str) -> None:

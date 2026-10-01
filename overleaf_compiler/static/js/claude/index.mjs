@@ -147,7 +147,8 @@ export async function restart() {
     await cc("set", st.opts);   // 前回の選択をサーバの側にも伝える
     const r = await cc("start");
     if (my !== gen) return;
-    Object.assign(st, { models: r.models || [], commands: r.commands || [], account: r.account || {}, fast: r.fast });
+    Object.assign(st, { models: r.models || [], commands: r.commands || [], account: r.account || {}, fast: r.fast,
+                        settings: r.settings || {}, remote: r.remote || {} });
     renderBar();
   } catch (e) { if (my === gen) fail(e); }
 }

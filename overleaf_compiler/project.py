@@ -239,6 +239,36 @@ def browse(data: Path, rel: str) -> dict:
     return {"path": str(d.relative_to(data)) if d != data else "", "entries": entries}
 
 
+def search_tree(data: Path, rel: str, q: str, limit: int = 300) -> dict:
+    """一覧の絞り込み。そのフォルダの下の階層をすべてたどり、名前（原稿は主文書の名前も）に q を含むものを返す。
+    原稿のフォルダの中（chapter などの下位フォルダ）までは見ない。"""
+    data = data.resolve()
+    base = (data / rel).resolve() if rel else data
+    if base != data and data not in base.parents:
+        raise ProjectError(f"{rel} は data の外")
+    words = q.lower().split()
+    hit = lambda *names: all(any(w in n.lower() for n in names) for w in words)
+    entries = []
+    for d, subs, _ in os.walk(base):
+        d = Path(d)
+        subs[:] = sorted(x for x in subs if not x.startswith((".", "_")) and x not in _SKIP_DIRS)
+        if d == base:
+            continue
+        info = _folder_info(d, data)
+        where = str(d.parent.relative_to(data)) if d.parent != data else ""
+        if info["mains"] or info["not_tex"]:
+            subs[:] = []   # 原稿の中の下位フォルダは原稿の一部
+            if hit(info["name"], *[m["name"] for m in info["mains"]], *[x["name"] for x in info["not_tex"]]):
+                entries.append({**info, "kind": "project", "where": where})
+        elif hit(info["name"]):
+            inner = [f for f in list_folders(d) if f["mains"] or f["not_tex"]]
+            entries.append({**info, "kind": "folder", "where": where, "count": len(inner),
+                            "mtime": max([f["mtime"] for f in inner] + [info["mtime"]])})
+        if len(entries) >= limit:
+            break
+    return {"path": str(base.relative_to(data)) if base != data else "", "entries": entries, "search": q}
+
+
 def rename_to_tex(path: Path, workspace: Path) -> Path:
     """LaTeX の中身を持つ .txt などを .tex に名前を変える（画面のボタンを押したときだけ）。"""
     path = path.resolve()

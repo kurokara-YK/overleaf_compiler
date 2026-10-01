@@ -67,6 +67,8 @@ body.editing #menubar { display: flex; }
 .seg button:hover { background: var(--hover); }
 .seg button.on { background: var(--accent); color: #fff; }
 .editor-only { display: none !important; } body.editing .editor-only { display: inline-flex !important; }
+.home-only { display: none !important; } body.home .home-only { display: inline-flex !important; }
+#reloadBtn.spin { pointer-events: none; opacity: .6; }
 
 /* ---- メニュー（ファイル・編集・表示・ヘルプ、⋮）---- */
 .menu { position: fixed; min-width: 230px; padding: 5px; background: var(--deep); border: 1px solid var(--edge);
@@ -140,3 +142,32 @@ body.home #home { display: block; } body.home #ide { display: none; }
   box-shadow: 0 6px 24px rgba(0,0,0,.45); z-index: 80; font-size: 13px; }
 #toast.open { display: block; } #toast.err { border-color: var(--err); } #toast.ok { border-color: var(--ok); }
 #toast button { margin-left: 8px; font-size: 12px; }
+
+/* ---- 一覧の項目の ⋮ と、絞り込みの結果の置き場所 ---- */
+.card .dots { align-self: center; background: transparent; padding: 2px 8px; color: var(--muted); font-size: 16px; visibility: hidden; }
+.card:hover .dots { visibility: visible; }
+.card .dots:hover { background: var(--dots-hover); color: var(--fg); }
+.card .where { font-size: 11.5px; color: var(--hint); margin-top: 1px; }
+
+/* ---- 取り込むものを選ぶ窓（最初はダウンロード）---- */
+#modal.wide { width: min(720px, calc(100vw - 32px)); }
+.picker .pk-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.picker .pk-bar button { font-size: 12.5px; padding: 3px 10px; }
+.picker .pk-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12.5px;
+  font-family: "Ubuntu Mono", monospace; text-align: right; }
+.picker .pk-list { height: min(52vh, 440px); overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--bar); padding: 4px; }
+.picker .pk-it { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; cursor: pointer; user-select: none; }
+.picker .pk-it:hover { background: var(--hover); }
+.picker .pk-it.sel { background: var(--accent); color: #fff; }
+.picker .pk-it.sel .d, .picker .pk-it.sel .when { color: #e0e3ff; }
+.picker .pk-it .ic { font-size: 17px; width: 22px; text-align: center; }
+.picker .pk-it .t { flex: 1; min-width: 0; }
+.picker .pk-it .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bright); }
+.picker .pk-it.sel .n { color: #fff; }
+.picker .pk-it .d { font-size: 12px; color: var(--muted); }
+.picker .pk-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.picker .pk-native { display: inline-block; margin-top: 4px; font-size: 12px; color: var(--link); cursor: pointer; }
+.picker .pk-native:hover { text-decoration: underline; }
+
+/* 一覧画面の拡大・縮小（zoom.mjs） */
+#home .home-inner { zoom: var(--home-zoom, 1); }

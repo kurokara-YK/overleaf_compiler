@@ -1,0 +1,17 @@
+\section{手順}\label{sec:method}
+
+手順の概要を図\ref{fig:flow}に示す．原稿を保存すると自動で組み直され，
+PDF をダブルクリックするとソースの該当行へ移る．
+
+\begin{figure}[t]
+  \centering
+  \input{figures/flow}
+  \caption{原稿を直して PDF を確かめる流れ}
+  \label{fig:flow}
+\end{figure}
+
+例として，$n$ 個の値 $x_1, \dots, x_n$ の平均 $\bar{x}$ と分散 $s^2$ を式\eqref{eq:mean}と式\eqref{eq:var}で定める．
+\begin{align}
+  \bar{x} &= \frac{1}{n} \sum_{i=1}^{n} x_i, \label{eq:mean} \\
+  s^2 &= \frac{1}{n} \sum_{i=1}^{n} \left( x_i - \bar{x} \right)^2. \label{eq:var}
+\end{align}

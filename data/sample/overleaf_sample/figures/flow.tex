@@ -1,0 +1,11 @@
+% 図1：原稿を直して PDF を確かめる流れ（TikZ）
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=24mm, minimum height=9mm, align=center},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick}]
+  \node[box] (edit) {原稿を直す};
+  \node[box, right=12mm of edit] (build) {自動で組む};
+  \node[box, right=12mm of build] (check) {PDF を確かめる};
+  \draw[arrow] (edit) -- (build);
+  \draw[arrow] (build) -- (check);
+  \draw[arrow] (check.south) -- ++(0,-6mm) -| (edit.south);
+\end{tikzpicture}

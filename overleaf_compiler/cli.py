@@ -1,6 +1,7 @@
 """overleaf-compiler — Overleaf の原稿をローカルで組み、PDF をクリックして直し、Overleaf へ戻す。
 
-  overleaf-compiler                                  ブラウザで data/ のワークスペース一覧を開く
+  overleaf-compiler                                  アプリとして data/ のワークスペース一覧を開く（Ctrl+C で閉じる）
+  overleaf-compiler --web                            ブラウザのタブで開く（今までの開き方）
   overleaf-compiler import <overleaf.zip> [展開先]   Overleaf で Download した zip を data/ へ展開する
   overleaf-compiler serve  [原稿 | ワークスペース]   ブラウザで PDF を開く。文をクリックすると LaTeX を直せる
   overleaf-compiler check  <原稿>                    組んで、エラー・未定義の参照・はみ出しを file:line で出す
@@ -119,16 +120,19 @@ def cmd_serve(a) -> None:
     from .launcher import server_info
     s = server_info()
     if s and Path(s["data"]) == data and not a.no_browser:
-        import webbrowser
         from urllib.parse import quote
+        from .launcher import open_tab, open_window
         rel = str(tex.relative_to(data)) if tex and tex.is_relative_to(data) else ""
         url = f"http://127.0.0.1:{s['port']}/" + (f"?p={quote(rel)}" if rel else f"?dir={quote(start)}" if start else "")
         print(f"overleaf-compiler: 動いているサーバを開いた  {url}\n        （止めるには  overleaf-compiler stop）")
-        webbrowser.open(url)
+        if a.web:
+            open_tab(url)
+        else:
+            open_window(url)
         return
     if tex:
         print(f"組版: {_engine_note(tex)}")
-    serve(data, start, tex, a.port, not a.no_browser)
+    serve(data, start, tex, a.port, not a.no_browser, app_window=not a.web)
 
 
 def cmd_check(a) -> None:
@@ -241,6 +245,7 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--data", help="ワークスペースの置き場（既定: overleaf_compiler/data）")
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--no-browser", action="store_true", help="ブラウザを自動で開かない")
+    s.add_argument("--web", action="store_true", help="アプリのウィンドウではなく、ブラウザのタブで開く")
     s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("comments", help="PDF に付いたコメントを出す・解決済みにする")
     s.add_argument("path", nargs="?", default=".")

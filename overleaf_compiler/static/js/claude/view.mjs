@@ -170,6 +170,7 @@ export function show(e) {
       else if (e.error) add("ccm note err", escapeHtml(e.result || `Error: ${e.subtype}`));
       break;
     case "note": add("ccm note", escapeHtml(e.text)); break;
+    case "commands": st.commands = e.commands || []; break;   // Skill を除いたスラッシュコマンド（会話の始めで分かる）
     case "usage": import("./composer.mjs").then((m) => m.setUsage(e.used, e.window)); break;
     case "limits": import("./dialogs.mjs").then((m) => m.setLimits(e)); break;
     case "error": cur = null; add("ccm note err", escapeHtml(e.text)); break;

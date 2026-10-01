@@ -1,6 +1,6 @@
 // ／メニューの項目（VS Code の拡張と同じ並び）と、それぞれが開く画面。
 // 使用量・状態・MCP・フック・許可・メモリ・巻き戻し・会話の一覧・書き出し
-import { $, api, post, escapeHtml, modal, closeBtn, showToast, fail, ago, store } from "../util.mjs";
+import { $, api, post, escapeHtml, modal, closeBtn, showToast, fail, ago, store, confirmBox } from "../util.mjs";
 import { openTab } from "../editor.mjs";
 import { revealEditor } from "../panels.mjs";
 import { st, cc, ccGet, icon, modelLabel, EFFORTS, EFFORT_LABEL, renderData, showPop, closePop, popOpen, isCodex, modes, effortLabel } from "./core.mjs";
@@ -22,16 +22,22 @@ export function actions() {
   add("Context", "Export conversation", "Copy the conversation as plain text or save it to a file", exportConversation);
   add("Context", "New conversation", "Open a new conversation in a new tab", () => import("./index.mjs").then((m) => m.newTab()), { filterOnly: true });
   add("Context", "Resume conversation", "Continue a previous conversation", () => openHistory(), { filterOnly: true });
+  // Model（VS Code と同じ並び：Switch model → Effort → Thinking → Switch models when flagged → Account & usage → fast mode）
   add("Model", "Switch model…", "Change the AI model", async () => (await composer()).openModelMenu(), { right: () => `<span class="dim">${escapeHtml(modelLabel())}</span>` });
-  add("Model", "Account & usage…", "View account info and usage", accountUsage);
-  add("Model", "Thinking", "Toggle extended thinking mode", async () => (await composer()).setOpt({ thinking: !st.opts.thinking }),
-    { keepOpen: true, right: () => toggle(st.opts.thinking) });
   add("Model", "Effort", "Set how hard the model tries", async () => {
     const i = EFFORTS.indexOf(st.opts.effort);
     (await composer()).setOpt({ effort: EFFORTS[(i + 1) % EFFORTS.length] });
   }, { keepOpen: true, hint: `(${EFFORT_LABEL[st.opts.effort]})`,
        right: () => `<span class="slider">${EFFORTS.map((e, k) => `<span class="dot${k <= EFFORTS.indexOf(st.opts.effort) ? " fill" : ""}${e === st.opts.effort ? " knob" : ""}"></span>`).join("")}</span>` });
+  add("Model", "Thinking", "Toggle extended thinking mode", async () => (await composer()).setOpt({ thinking: !st.opts.thinking }),
+    { keepOpen: true, right: () => toggle(st.opts.thinking) });
+  add("Model", "Switch models when a message is flagged",
+    "When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.",
+    () => setSetting("switchModelsOnFlag"), { keepOpen: true, right: () => toggle(st.settings?.switchModelsOnFlag !== false) });
+  add("Model", "Account & usage…", "View account info and usage", accountUsage);
   add("Model", "Toggle fast mode", "Toggle fast mode for faster responses (Opus only)", fastMode);
+  // Customize
+  add("Customize", "Output styles", "Change response formatting style", () => sendSlash("/output-style"));
   add("Customize", "MCP servers", "Configure Model Context Protocol servers", mcpServers);
   add("Customize", "Hooks", "View and edit hooks", () => dataDialog("Hooks", "get_hooks_listing"));
   add("Customize", "Permissions", "View and edit permission rules", () => dataDialog("Permissions", "list_permission_rules"));
@@ -41,17 +47,27 @@ export function actions() {
   add("Customize", "Memory", "View and manage what Claude remembers about this project", () => dataDialog("Memory", "get_memory_dialog"));
   add("Customize", "Instructions", "Edit CLAUDE.md files", instructions);
   add("Customize", "Manage plugins", "Install, enable, or disable plugins", () => sendSlash("/plugin"));
-  add("Customize", "Output styles", "Change response formatting style", () => sendSlash("/output-style"));
   add("Customize", "Open Claude in Terminal", "Open a new Claude instance in the Terminal", () => cc("terminal").catch(fail));
+  add("Customize", "Claude Design", "Connect Claude Design to create designs from your code", () => notHere("Claude Design"));
+  add("Customize", "Claude in Chrome", "Let Claude use your Chrome browser", () => notHere("Claude in Chrome"));
+  // Settings（Switch account → Sign out → General config → Remote Control → Focus view）
+  add("Settings", "Switch account", "Log in with a different account", switchAccount);
+  add("Settings", "Sign out", "Sign out of Claude on this computer", signOut);
   add("Settings", "General config…", "Open Claude Code configuration", () => dataDialog("Settings", "get_settings"));
+  if (st.remote?.available !== false) {
+    add("Settings", "Enable Remote Control for all sessions",
+      "Connect all sessions to claude.ai/code automatically so you can view and control them from the web.",
+      () => setSetting("remoteControlAtStartup"), { keepOpen: true, right: () => toggle(!!st.settings?.remoteControlAtStartup) });
+  }
   add("Settings", "Focus view", "Show only your prompts and Claude's responses", () => {
     const on = !$("claude").classList.contains("focus");
     $("claude").classList.toggle("focus", on); store.set("oc.ccFocus", on ? "1" : "0");
   }, { keepOpen: true, right: () => toggle($("claude").classList.contains("focus")) });
-  add("Support", "View help docs", "Open help documentation", () => window.open("https://code.claude.com/docs", "_blank", "noopener"));
-  for (const c of st.commands) {
-    add("Slash Commands", `/${c.name}`, c.description, () => insertSlash(`/${c.name} `), { hint: c.argumentHint || "" });
+  // Slash Commands（Skills は出さない。VS Code と同じく、絞り込んだときだけ出す。名前の順）
+  for (const c of [...st.commands].sort((a, b) => a.name.localeCompare(b.name))) {
+    add("Slash Commands", `/${c.name}`, c.description, () => insertSlash(`/${c.name} `), { hint: c.argumentHint || "", filterOnly: true });
   }
+  add("Support", "View help docs", "Open help documentation", () => window.open("https://code.claude.com/docs", "_blank", "noopener"));
   return A;
 }
 // Codex の拡張のスラッシュコマンド（この画面で使えるもの）
@@ -97,6 +113,26 @@ async function codexMcp() {
   const html = `<div class="ccmcp">${(r.data || []).map((s) => `<div class="srv"><span class="st ${s.status === "ready" || s.authStatus ? "connected" : ""}"></span>
     <div class="t"><b>${escapeHtml(s.name)}</b><div class="dim">${Object.keys(s.tools || {}).length} tools</div></div></div>`).join("") || '<div class="dim">No MCP servers</div>'}</div>`;
   modal("MCP", html, closeBtn);
+}
+
+// ---- Settings・Model の切り替え（Claude Code の設定 ~/.claude/settings.json の userSettings に書く）----
+async function setSetting(key) {
+  const now = key === "switchModelsOnFlag" ? st.settings?.switchModelsOnFlag !== false : !!st.settings?.remoteControlAtStartup;
+  st.settings = { ...st.settings, [key]: !now };
+  try { await cc("control", { subtype: "update_settings", source: "userSettings", settings: { [key]: !now } }); }
+  catch (e) { st.settings = { ...st.settings, [key]: now }; fail(e); }
+}
+async function switchAccount() {
+  try { await cc("account", { action: "login" }); showToast("端末が開くので、そこで別のアカウントにログインする。終わったら新しい会話から使える", "", 7000); }
+  catch (e) { fail(e); }
+}
+async function signOut() {
+  if (!(await confirmBox("Sign out", "このパソコンの Claude Code からサインアウトする？<br><span class='kbd'>VS Code・端末の Claude Code も同じログインを使っているので、そちらもサインアウトされる</span>", "Sign out", true))) return;
+  try { await cc("account", { action: "logout" }); showToast("サインアウトした。使うときは Switch account でログインする", "ok", 6000); }
+  catch (e) { fail(e); }
+}
+function notHere(name) {
+  showToast(`${escapeHtml(name)} は VS Code・ブラウザの拡張の機能なので、この画面では使えない`, "", 5000);
 }
 
 export function runAction(a) { Promise.resolve(a.run()).catch(fail); }

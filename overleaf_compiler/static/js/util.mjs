@@ -25,6 +25,9 @@ export function setTabProject(p, push = true, dir = "") {
 
 export async function api(path, opts) {
   const r = await fetch(url(path), opts);
+  // 画面だけ新しく、サーバが古いまま（更新したのに起動し直していない）だと、新しい窓口が 404 になる
+  if (r.status === 404 && path.startsWith("/api/"))
+    throw new Error("この操作は、動いているサーバがまだ古いので使えない。アプリを閉じて開き直すこと（ドックのアイコンを右クリック →「サーバーを止める」→ もう一度開く）");
   const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
   if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
   return j;
