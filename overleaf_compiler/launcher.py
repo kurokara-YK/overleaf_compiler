@@ -153,6 +153,8 @@ def open_window(url: str, tab: bool = False) -> bool:
         open_tab(url)
         return False
     PROFILE.mkdir(parents=True, exist_ok=True)
+    if "app=1" not in url:   # 画面が、自分がアプリのウィンドウだと分かるように（「Web で開く」ボタンを出す）
+        url += ("&" if "?" in url else "?") + "app=1"
     cmd = [*b, f"--user-data-dir={PROFILE}", f"--class={WM_CLASS}", "--no-first-run", "--no-default-browser-check",
            f"--app={url}"]
     try:
@@ -166,6 +168,14 @@ def open_window(url: str, tab: bool = False) -> bool:
         return True
     open_tab(url)                        # アプリのウィンドウで開けなかった。ふつうのタブで開く
     return False
+
+
+_detached = False   # 「アプリを閉じて Web で開く」を押した（ウィンドウを閉じても、サーバは Web のために動き続ける）
+
+
+def detach() -> None:
+    global _detached
+    _detached = True
 
 
 def watch_window(on_close) -> None:
@@ -182,7 +192,8 @@ def watch_window(on_close) -> None:
             time.sleep(1)
             gone = gone + 1 if not _browser_pid() else 0
             if gone >= 2:
-                on_close()
+                if not _detached:
+                    on_close()
                 return
     threading.Thread(target=run, daemon=True).start()
 

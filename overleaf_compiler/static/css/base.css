@@ -68,6 +68,8 @@ body.editing #menubar { display: flex; }
 .seg button.on { background: var(--accent); color: #fff; }
 .editor-only { display: none !important; } body.editing .editor-only { display: inline-flex !important; }
 .home-only { display: none !important; } body.home .home-only { display: inline-flex !important; }
+.any-mode { display: none !important; } body.home .any-mode, body.editing .any-mode, body.git .any-mode { display: inline-flex !important; }
+html[data-app="1"] .web-only, html[data-app="0"] .app-only { display: none !important; }
 #reloadBtn.spin { pointer-events: none; opacity: .6; }
 
 /* ---- メニュー（ファイル・編集・表示・ヘルプ、⋮）---- */
@@ -171,3 +173,139 @@ body.home #home { display: block; } body.home #ide { display: none; }
 
 /* 一覧画面の拡大・縮小（zoom.mjs） */
 #home .home-inner { zoom: var(--home-zoom, 1); }
+
+/* ---- Git の画面（ヘッダの ⎇ Git。gitpage.mjs）---- */
+#gitpage { display: none; height: calc(100% - 44px); flex-direction: column; }
+body.git #gitpage { display: flex; } body.git #home, body.git #ide, body.git #histpage { display: none !important; }
+body.git #menubar, body.git .editor-only { display: none !important; }
+#gpTop { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bar); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#gpTop .gp-title { color: var(--bright); } #gpTop .gp-grow { flex: 1; }
+#gpTop .gp-sep { width: 1px; height: 18px; background: var(--line); }
+#gpTop select { font: inherit; font-size: 13px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--deep); color: var(--fg); }
+.gp-sync { font-size: 12.5px; color: var(--muted); }
+#gpBody { flex: 1; min-height: 0; display: flex; }
+#gpLeft { width: 380px; flex: none; display: flex; flex-direction: column; background: var(--bar); border-right: 1px solid var(--line); }
+.gp-h { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-weight: 600; color: var(--bright); font-size: 13px; }
+.gp-h label { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+#gpFiles { flex: 1; min-height: 80px; overflow-y: auto; padding: 0 6px 6px; }
+.gp-file { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; min-width: 0; }
+.gp-file:hover { background: var(--hover); } .gp-file.sel { background: var(--sel); }
+.gp-file.no { opacity: .5; }
+.gp-file .n { color: var(--bright); white-space: nowrap; }
+.gp-file .d { color: var(--hint); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.gp-file .k { width: 16px; text-align: center; font-weight: 700; font-size: 11.5px; flex: none; }
+.gp-file .kM { color: var(--warn); } .gp-file .kA, .gp-file .kN { color: var(--ok); } .gp-file .kD { color: var(--err); } .gp-file .kR { color: var(--link); }
+.gp-commit { padding: 10px 12px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+#gpMsg { width: 100%; resize: vertical; font: inherit; font-size: 13px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--deep); color: var(--fg); }
+#gpMsg:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.gp-row { display: flex; gap: 6px; align-items: center; } .gp-row > button { flex: 1; justify-content: center; }
+.gp-row select { flex: 1; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--deep); color: var(--fg); }
+#gpPrivate { font-size: 12px; color: var(--link); cursor: pointer; white-space: nowrap; } #gpPrivate:hover { text-decoration: underline; }
+#gpMsgLine { margin: 0; min-height: 1.2em; }
+#gpMain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#gpDiffHead { padding: 8px 14px; color: var(--muted); font-size: 12.5px; border-bottom: 1px solid var(--line); }
+#gpDiff { flex: 1; margin: 0; overflow: auto; padding: 8px 14px 40px; font: 12.5px/1.5 "Ubuntu Mono", monospace; white-space: pre-wrap; word-break: break-all; }
+#gpDiff .ins { background: rgba(35, 165, 90, .18); display: inline-block; width: 100%; }
+#gpDiff .del { background: rgba(242, 63, 67, .18); display: inline-block; width: 100%; }
+#gpDiff .hunk { color: var(--link); }
+.gp-hits { max-height: 45vh; overflow: auto; font-size: 12.5px; } .gp-hits > div { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.gp-hits code { color: var(--muted); }
+.gp-out { max-height: 30vh; overflow: auto; background: var(--deep); padding: 8px; border-radius: 6px; font-size: 12px; }
+
+/* Git の画面：上げる先（原稿のフォルダ・アカウント・リポジトリ・ブランチ）と、Git で管理する案内 */
+#gpMode button { font-size: 12.5px; }
+#gpTarget { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
+#gitpage[data-mode="tool"] .data-only { display: none !important; }
+.gp-f { display: inline-flex; align-items: center; gap: 6px; }
+.gp-f .lab { font-size: 12px; color: var(--muted); }
+.gp-f select { font: inherit; font-size: 13px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--deep); color: var(--fg); max-width: 280px; }
+.gp-f button { font-size: 12.5px; padding: 2px 10px; }
+.badge.warn { color: var(--warn); border-color: var(--warn); }
+#gpSetup { display: none; padding: 30px 16px; max-width: 760px; margin: 0 auto; width: 100%; }
+#gpSetup .gp-row { gap: 10px; } #gpSetup label { color: var(--muted); font-size: 13px; }
+.gp-grow { flex: 1; }
+.gp-login { display: flex; flex-direction: column; gap: 10px; }
+.gp-login .code { font: 700 30px/1.2 "Ubuntu Mono", monospace; letter-spacing: 4px; color: var(--bright); text-align: center;
+  padding: 10px; border-radius: 8px; background: var(--deep); user-select: all; }
+.gp-path { margin: 8px 0; font-size: 13px; } .gp-path a { color: var(--link); cursor: pointer; }
+.ccrw .it.on { background: var(--accent); color: #fff; } .ccrw .it.on .dim { color: #e0e3ff; }
+
+/* Git の画面：リポジトリの設定（名前・公開範囲・ブランチ・削除） */
+.ccrw .it .gear { float: right; font-size: 11.5px; padding: 1px 8px; }
+.gp-set h4 { margin: 14px 0 6px; font-size: 13px; color: var(--bright); } .gp-set h4:first-of-type { margin-top: 4px; }
+.gp-set .gp-row { gap: 8px; padding: 3px 0; } .gp-set .gp-row > button { flex: none; font-size: 12.5px; padding: 2px 10px; }
+.gp-branches { max-height: 30vh; overflow: auto; }
+.gp-danger { margin-top: 16px; padding: 10px 12px; border: 1px solid var(--err); border-radius: 8px; }
+.gp-danger h4 { color: var(--err) !important; margin-top: 0 !important; }
+
+/* Git の画面：上げる先のリポジトリ（選ぶ／新しく作るを分ける） */
+.gpr-tabs { display: flex; margin-bottom: 12px; } .gpr-tabs button { flex: 1; font-size: 13px; padding: 6px 10px; }
+.gpr-cur { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.ccrw .it.now { outline: 1px solid var(--accent); }
+.gpr-vis { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.gpr-vis label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.gpr-vis label:has(input:checked) { border-color: var(--accent); background: var(--sel); }
+.gpr-vis input { margin-top: 3px; width: auto !important; flex: none; } .gpr-vis label > div { flex: 1; text-align: left; }
+.gpr-name { display: flex; gap: 6px; align-items: center; } .gpr-name input { flex: 1; }
+.gpr-name select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--deep); color: var(--fg); }
+
+/* Git の画面：編集履歴（githist.mjs） */
+#ghHist { display: none; flex: 1; min-height: 0; }
+#gitpage[data-view="hist"] #ghHist { display: flex; }
+#gitpage[data-view="hist"] #gpBody, #gitpage[data-view="hist"] #gpSetup { display: none !important; }
+#ghLeft { width: 330px; flex: none; display: flex; flex-direction: column; background: var(--bar); border-right: 1px solid var(--line); }
+#ghLeft select, #ghBar select { font: inherit; font-size: 12.5px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--deep); color: var(--fg); max-width: 220px; }
+.ghnote { font-size: 11.5px; color: var(--hint); padding: 0 12px 8px; }
+#ghList { flex: 1; overflow-y: auto; padding: 0 6px 20px; }
+.ghg { margin-top: 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer; border-left: 3px solid var(--err); background: var(--deep); }
+.ghg .t { display: flex; font-weight: 600; color: var(--bright); font-size: 13px; }
+.ghg .dim, .ghc .dim { font-size: 11.5px; color: var(--hint); }
+.ghc { padding: 5px 8px 5px 14px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.ghc .t { display: flex; gap: 6px; min-width: 0; } .ghc .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.ghc .ico { color: var(--link); flex: none; } .ghc.unsent .ico { color: var(--warn); }
+.ghg:hover, .ghc:hover { background: var(--hover); } .ghg.on, .ghc.on { background: var(--sel); }
+.pa { color: var(--ok); } .pd { color: var(--err); }
+#ghMain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#ghBar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; font-size: 13px; }
+#ghBar .dim { color: var(--hint); font-size: 12px; }
+#ghWrap { flex: 1; min-height: 0; display: flex; }
+#ghPdf { flex: 1; min-width: 0; overflow: auto; background: #525659; padding: 12px 0 40px; }
+#ghHist[data-k="text"] #ghPdf { background: var(--bg); }
+#ghHist[data-k="text"] #ghPages, #ghHist:not([data-k="text"]) #ghText { display: none; }
+#ghMsg { display: none; margin: 8px 16px; padding: 10px 14px; border-radius: 6px; background: var(--bar); color: var(--fg); font-size: 13px; }
+#ghMsg pre { white-space: pre-wrap; max-height: 30vh; }
+.ghpage { position: relative; margin: 0 auto 12px; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .4); }
+.ghpage canvas { width: 100%; height: 100%; display: block; }
+.ghpage > div { position: absolute; cursor: pointer; }
+.ghu { background: rgba(242, 63, 67, .10); }
+.ghx { background: rgba(242, 63, 67, .18); border-bottom: 2px solid #e5252a; }
+.ghcut { background: #e5252a; }
+.ghbar { background: #e5252a; border-radius: 2px; } .ghbar.add { background: #e5252a; } .ghbar.del { background: repeating-linear-gradient(#e5252a 0 4px, transparent 4px 7px); }
+.ghpage .cur.ghbar { width: 7px !important; left: 8px !important; }
+.ghpage .cur.ghu { background: rgba(242, 63, 67, .22); } .ghpage .cur.ghx { background: rgba(242, 63, 67, .38); }
+#ghText { margin: 0; padding: 8px 14px 40px; font: 12.5px/1.5 "Ubuntu Mono", monospace; white-space: pre-wrap; word-break: break-all; color: var(--fg); }
+#ghText .ins { background: rgba(35, 165, 90, .18); display: inline-block; width: 100%; }
+#ghText .del { background: rgba(242, 63, 67, .18); display: inline-block; width: 100%; }
+#ghText .hunk { color: var(--link); }
+#ghText .file { display: inline-block; width: 100%; margin-top: 14px; padding: 4px 8px; background: var(--bar); color: var(--bright); font-weight: 700; border-radius: 4px; }
+#ghSide { width: 320px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--bar); }
+#ghSide .gp-h button { font-size: 11px; padding: 1px 8px; }
+#ghChanges { flex: 1; overflow-y: auto; padding: 0 6px 20px; }
+.ghx-it { padding: 7px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; border-left: 3px solid #e5252a; margin-bottom: 6px; background: var(--deep); }
+.ghx-it:hover { background: var(--hover); } .ghx-it.on { background: var(--sel); } .ghx-it.lost { border-left-color: var(--hint); }
+.ghx-it .h { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .ghx-it .f { color: var(--bright); word-break: break-all; }
+.ghx-it .k { font-size: 11px; padding: 0 6px; border-radius: 4px; background: rgba(242, 63, 67, .2); color: #ff8a8d; }
+.ghx-it .old { margin-top: 4px; color: var(--hint); text-decoration: line-through; word-break: break-all; }
+.ghx-it .new { margin-top: 4px; color: var(--fg); word-break: break-all; }
+.ghx-it .new.raw { font-family: "Ubuntu Mono", monospace; }
+.ghx-it mark { background: rgba(242, 63, 67, .3); color: inherit; border-bottom: 2px solid #e5252a; }
+.gp-op { display: none; padding: 8px 10px; border: 1px solid var(--warn); border-radius: 6px; font-size: 12.5px; }
+.gp-op .gp-row { margin-top: 6px; } .gp-op .kbd { word-break: break-all; }
+.gp-row:has(> #gpGen) { flex-wrap: wrap; } #gpGen { flex: 1 1 100%; order: -1; } .gp-file .kU { color: var(--err); }
+.gp-lab { font-size: 12px; color: var(--muted); }
+.ghpage .ghnum { color: #e5252a; font: 700 9px/12px sans-serif; background: none; }
+.ghx-it .no { font-weight: 700; color: #ff8a8d; }
+.ghg.wt { border-left-color: var(--warn); }
+#ghExport { font-size: 12.5px; padding: 3px 10px; }
+#pageFit { cursor: pointer; white-space: nowrap; } #pageFit:hover { text-decoration: underline; }
+#pageFit.ok { color: var(--ok); } #pageFit.warn { color: var(--warn); } #pageFit.err { color: var(--err); font-weight: 600; }

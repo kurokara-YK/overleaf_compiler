@@ -32,6 +32,8 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <button class="ptitle editor-only" id="ptitle" title="原稿のメニュー（ダウンロード・複製・名前の変更）"><span id="ptname"></span> ▾</button>
   <button class="ghost editor-only" id="histBtn" title="変更履歴（Overleaf の History）">🕘 履歴</button>
   <button class="ghost home-only" id="reloadBtn" title="一覧を読み直す（外で増えた・消えたものも出る）">⟳ 再読み込み</button>
+  <button class="ghost any-mode" id="gitBtn" title="overleaf-compiler（このツール）の Git：コミット・push・取り込み">⎇ Git</button>
+  <button class="ghost any-mode" id="webBtn" title="開き方を変える"></button>
   <span class="seg editor-only" id="layout" title="レイアウト">
     <button data-l="editor">エディタ</button><button data-l="both" class="on">両方</button><button data-l="pdf">PDF</button>
   </span>
@@ -114,9 +116,15 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <div class="mi" data-act="shortcuts">キーボードショートカット</div>
   <div class="mi" data-act="about">この画面について</div>
 </div>
+<div class="menu" id="mWeb">
+  <div class="mi app-only" data-act="web:open">🌐 Web で開く<span class="k">このウィンドウはそのまま</span></div>
+  <div class="mi app-only" data-act="web:close">⏏ アプリを閉じて Web で開く</div>
+  <div class="mi web-only" data-act="web:app">🖥 アプリで開く<span class="k">専用のウィンドウ</span></div>
+</div>
 <div class="menu" id="mHomeItem">
   <div class="mi" data-act="hitem:download">⤓ ダウンロード<span class="k" id="mHomeZipNote">.zip</span></div>
   <div class="mi" data-act="hitem:rename">名前を変更</div>
+  <div class="mi" data-act="hitem:github">⎇ GitHub に上げる…</div>
   <hr>
   <div class="mi" data-act="hitem:delete">削除<span class="k">ごみ箱へ</span></div>
 </div>
@@ -232,6 +240,7 @@ try { const t = localStorage.getItem("oc.theme") || "system";
     <div id="edfoot">
       <span id="saveState">自動で保存する</span>
       <span id="cursorPos"></span>
+      <span id="pageFit" title="最後のページにあと何行入るか（目安）。押すと上限のページ数を決める"></span>
       <button id="fsDown" title="文字を小さく">A−</button><button id="fsUp" title="文字を大きく">A＋</button>
       <button id="vscode" title="VS Code でこの行を開く">VS Code</button>
     </div>
@@ -289,6 +298,84 @@ try { const t = localStorage.getItem("oc.theme") || "system";
     <input type="file" id="ccFileInput" multiple hidden>
   </section>
 </main>
+
+<!-- Git の画面（ヘッダの ⎇ Git）。原稿（data のフォルダ）か本体のリポジトリ。中身は gitpage.mjs・githist.mjs、サーバ側は gitops.py・gitview.py -->
+<section id="gitpage">
+  <div id="gpTop">
+    <button id="gpBack">← 戻る</button>
+    <span class="seg" id="gpMode" title="GitHub に上げるもの"><button data-m="data" class="on">原稿（data）</button><button data-m="tool">overleaf-compiler 本体</button></span>
+    <span class="seg" id="gpView" title="見るもの"><button data-v="commit" class="on">変更とコミット</button><button data-v="hist">編集履歴</button></span>
+    <span class="gp-grow"></span>
+    <span id="gpSync" class="gp-sync"></span>
+    <button id="gpFetch" title="GitHub の最新を確かめる（git fetch）">⟳ 確認</button>
+    <button id="gpPull" title="GitHub の新しいコミットを取り込む（fast-forward のみ）">⤓ 最新を取り込む</button>
+  </div>
+  <div id="gpTarget">
+    <span class="gp-f data-only"><span class="lab">フォルダ</span><select id="gpFolder" title="GitHub に上げる、data の中のフォルダ"></select>
+      <button id="gpPickFolder" title="data の中のフォルダを選ぶ">選ぶ…</button></span>
+    <span class="gp-f"><span class="lab">アカウント</span><select id="gpAccount" title="どの GitHub のアカウントで上げるか"></select>
+      <button id="gpLogin" title="GitHub にログインする（デバイスコード）">GitHub にログイン</button>
+      <button id="gpLogout" class="ghost" title="このアカウントとの連携をやめる">連携をやめる</button></span>
+    <span class="gp-f"><span class="lab" id="gpRepoLab">リポジトリ</span><button id="gpRepoBtn" title="上げる先のリポジトリを選ぶ・作る">選ぶ…</button><span id="gpVis" class="badge"></span></span>
+    <span class="gp-f"><span class="lab">ブランチ</span><select id="gpBranch" title="ブランチ"></select>
+      <button id="gpNewBranch" title="今の状態から新しいブランチを作る">＋</button></span>
+  </div>
+  <div id="gpSetup">
+    <div class="card nodefault"><div class="t">
+      <div class="n">「<span id="gpSetupName"></span>」はまだ Git で管理していない</div>
+      <div class="d">Git で管理すると、変更の記録を残して GitHub に上げられる。LaTeX の中間生成物（.aux・.log など）を入れない設定（.gitignore）も作る。<br>
+        中に作るリポジトリは、overleaf-compiler 本体とは別のもの（本体には入らない）。</div>
+      <div class="gp-row" style="margin-top:10px"><label><input type="checkbox" id="gpInclPdf"> 組んだ PDF も入れる</label>
+        <span class="gp-grow"></span><button id="gpInit" class="primary">Git で管理する</button></div>
+    </div></div>
+  </div>
+  <div id="gpBody">
+    <aside id="gpLeft">
+      <div class="gp-h"><span>変更 <span id="gpCount"></span></span><label><input type="checkbox" id="gpAll" checked> すべて</label></div>
+      <div id="gpFiles"></div>
+      <div class="gp-commit">
+        <textarea id="gpMsg" rows="6" placeholder="コミットメッセージ（1行目に短い要約、空行のあとに箇条書き）" spellcheck="false"></textarea>
+        <div class="gp-row">
+          <span class="gp-lab">作成に使う</span><select id="gpEngine" title="コミットメッセージを書かせる相手">
+            <option value="claude">Claude Code</option><option value="codex">Codex</option><option value="copilot">GitHub Copilot</option></select>
+          <button id="gpGen" title="選んだファイルの変更から、コミットメッセージを書かせる">✨ コミットメッセージを自動で作成</button>
+        </div>
+        <div class="gp-row"><button id="gpCommit" class="primary">コミット</button></div>
+        <div class="gp-row"><button id="gpPush" title="まだ送っていないコミットを GitHub へ送る">⤒ push</button>
+          <button id="gpUndo" title="直前のコミットを取り消す（送っていなければ無かったことに、送ってあれば打ち消すコミットを作る）">↶ コミットを取り消す</button></div>
+        <div id="gpOp" class="gp-op"></div>
+        <div class="gp-row"><span class="gp-grow"></span><a id="gpPrivate" title="コミットの前に、差分にこれらの言葉が無いか調べる（設定はリポジトリの外）">公開前に調べる言葉…</a></div>
+        <div id="gpMsgLine" class="msgline"></div>
+      </div>
+    </aside>
+    <div id="gpMain"><div id="gpDiffHead">ファイルを選ぶと、変更（足した行は緑、消した行は赤）が出る</div><pre id="gpDiff"></pre></div>
+  </div>
+  <!-- 編集履歴：push ごとのコミットと、その版の PDF の上の変わったところ（githist.mjs） -->
+  <div id="ghHist">
+    <aside id="ghLeft">
+      <div class="gp-h"><span>ブランチ</span><select id="ghRef" title="見るブランチ（このパソコン・GitHub）"></select></div>
+      <div class="ghnote">push ごとにまとめている。見出しを押すとその回の変更をまとめて、コミットを押すとそのコミットだけを見る</div>
+      <div id="ghList"></div>
+    </aside>
+    <div id="ghMain">
+      <div id="ghBar">
+        <span id="ghWhat"></span><span class="gp-grow"></span>
+        <span class="gp-f"><span class="lab">比べる相手</span><select id="ghFrom" title="どの版と比べるか"></select></span>
+        <span class="gp-f" id="ghTexWrap" style="display:none"><span class="lab">原稿</span><select id="ghTex"></select></span>
+        <span class="seg" id="ghMode"><button data-k="pdf" class="on">PDF</button><button data-k="text">文字</button></span>
+        <button id="ghExport" class="primary" disabled title="赤線を焼き込んだ PDF をダウンロード（先生に送る「前回からの修正箇所」。最後のページに一覧）">⤓ 赤線つき PDF</button>
+      </div>
+      <div id="ghWrap">
+        <div id="ghPdf"><div id="ghMsg" class="empty"></div><div id="ghPages"></div><pre id="ghText"></pre></div>
+        <aside id="ghSide">
+          <div class="gp-h"><span>変わったところ <span id="ghCount"></span></span>
+            <span><button id="ghPrev" title="前の変更">▲</button> <button id="ghNext" title="次の変更">▼</button></span></div>
+          <div id="ghChanges"></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- 変更履歴の画面（Overleaf の History）。左にファイル、中央にその版の中身と違い、右に版の一覧 -->
 <section id="histpage">

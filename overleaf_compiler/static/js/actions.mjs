@@ -16,6 +16,7 @@ import { openHistory } from "./histpage.mjs";
 import { ask, post, tab, setTabProject, bus } from "./util.mjs";
 import { openMenu } from "./menu.mjs";
 import { homeItemAct } from "./home.mjs";
+import { webAct } from "./appmode.mjs";
 import { info } from "./state.mjs";
 
 // 原稿のメニュー（ヘッダの原稿名）。Overleaf のプロジェクト名のメニューと同じ
@@ -107,6 +108,7 @@ export async function runAct(a) {
         <span class="kbd">ファイルの前の版は、原稿のフォルダの外（~/.local/share/overleaf-compiler/）に残している</span>`,
         closeBtn);
     case "item": return itemAct(v);
-    case "hitem": return homeItemAct(v);   // 一覧の項目の ⋮（"home" はファイル →「一覧に戻る」で使っている）
+    case "hitem": return homeItemAct(v);
+    case "web": return webAct(v);   // 一覧の項目の ⋮（"home" はファイル →「一覧に戻る」で使っている）
   }
 }

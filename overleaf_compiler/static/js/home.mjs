@@ -25,7 +25,7 @@ export function setCrumb() {
   else $("crumb").innerHTML = crumbHtml(browsePath ? browsePath.split("/") : [], true);
 }
 $("crumb").addEventListener("click", (e) => { const a = e.target.closest("a[data-go]"); if (a) goHome(a.dataset.go); });
-$("brand").onclick = () => goHome(info && info.main ? dirname(dirname(info.rel)) : "");
+$("brand").onclick = () => goHome("");   // いつも data の直下（一番上）へ戻る
 
 // 一覧へ戻る。原稿を開いていれば閉じる（ほかのタブが見ていなければ、サーバが組版を止める）
 export async function goHome(path) {
@@ -162,6 +162,7 @@ export async function homeItemAct(v) {
   const f = menuItem;
   if (!f) return;
   if (v === "download") { location.href = `/api/item_zip?path=${enc(f.dir)}`; return; }
+  if (v === "github") { const g = await import("./gitpage.mjs"); return g.openGit({ mode: "data", dir: f.dir }); }
   if (v === "rename") {
     const name = await ask("名前を変更", `「${escapeHtml(f.name)}」の新しい名前（変更履歴は引き継ぐ）`, f.name);
     if (!name || name === f.name) return;

@@ -4,6 +4,7 @@
   1. TeX Live を ~/texlive/<年> に入れる（既に latexmk があれば飛ばす）
   2. 追加の TeX パッケージを入れる（足りないものだけ）
   3. pandoc を ~/.local/bin に入れる（Word・Markdown・HTML への書き出しに使う。既にあれば飛ばす）
+  3b. gh（GitHub CLI）を ~/.local/bin に入れる（Git の画面で GitHub にログインするのに使う。既にあれば飛ばす）
   4. overleaf-compiler コマンドを ~/.local/bin に作る
   5. ~/.bashrc に TeX Live の PATH を足す（既にあれば飛ばす）
   6. アプリの一覧に登録する（右クリックの項目・セットアップ・削除も）
@@ -75,12 +76,14 @@ def status() -> dict:
     """セットアップ画面・設定画面に出す、導入の状態。"""
     from .claude import find_claude
     from .codex import find_codex
+    from .ghauth import find_gh
     tl = latexmk()
     return {
         "python": sys.version.split()[0],
         "latexmk": tl,
         "texlive_user": str(tl_bin().parent.parent) if tl_bin() else None,
         "pandoc": pandoc(),
+        "gh": find_gh(),
         "claude": find_claude(),
         "codex": find_codex(),
         "command": command_link().resolve() == (REPO / "overleaf_compiler.sh").resolve() if command_link().exists() else False,
@@ -201,6 +204,19 @@ def install_pandoc(progress: Progress | None = None) -> None:
         _log(progress, f"注意: pandoc を入れられなかった（{e}）。Word などへの書き出しだけが使えない（ほかは使える）")
 
 
+def install_gh(progress: Progress | None = None) -> None:
+    from .ghauth import find_gh, install_gh as _install
+    if find_gh():
+        _log(progress, f"gh: 導入済み（{find_gh()}）")
+        return
+    _log(progress, "gh（GitHub CLI）を ~/.local/bin に入れる（Git の画面で GitHub にログインするのに使う）")
+    try:
+        _install()
+        _log(progress, "gh を入れた")
+    except Exception as e:   # GitHub への連携だけが使えなくなる。導入は止めない
+        _log(progress, f"注意: gh を入れられなかった（{e}）。Git の画面から GitHub にログインするときにもう一度入れられる")
+
+
 def install_command(progress: Progress | None = None) -> None:
     BIN.mkdir(parents=True, exist_ok=True)
     link = command_link()
@@ -289,7 +305,7 @@ def set_autostart(on: bool, progress: Progress | None = None) -> None:
 
 def install_all(opts: dict | None = None, progress: Progress | None = None) -> None:
     """opts: texlive / pandoc / command / launcher / pin / autostart（既定はすべて True、autostart だけ False）。"""
-    o = {"texlive": True, "pandoc": True, "command": True, "launcher": True, "pin": True, "autostart": False, **(opts or {})}
+    o = {"texlive": True, "pandoc": True, "gh": True, "command": True, "launcher": True, "pin": True, "autostart": False, **(opts or {})}
     if sys.version_info < (3, 10):
         raise RuntimeError("Python 3.10 以上が必要")
     if o["texlive"]:
@@ -297,6 +313,8 @@ def install_all(opts: dict | None = None, progress: Progress | None = None) -> N
         install_tex_packages(progress)
     if o["pandoc"]:
         install_pandoc(progress)
+    if o["gh"]:
+        install_gh(progress)
     if o["command"]:
         install_command(progress)
     if o["texlive"]:

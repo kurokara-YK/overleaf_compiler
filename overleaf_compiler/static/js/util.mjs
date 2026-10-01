@@ -70,7 +70,7 @@ export function modal(title, html, buttons) {
     const primary = buttons.find((b) => b.cls === "primary" || b.cls === "danger");
     const key = (e) => {
       if (e.key === "Escape") done(null);
-      else if (e.key === "Enter" && !e.isComposing && primary) { e.preventDefault(); done(primary.value); }
+      else if (e.key === "Enter" && !e.isComposing && primary && e.target.tagName !== "TEXTAREA") { e.preventDefault(); done(primary.value); }
     };
     function done(v) {
       back.classList.remove("open"); removeEventListener("keydown", key, true);

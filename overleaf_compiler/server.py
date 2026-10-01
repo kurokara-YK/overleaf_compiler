@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, quote, urlparse
 from . import sync
 from .app import App
 from . import claude, launcher
+from . import ghauth, gitops, gitview
 from .claude import ClaudeError
 from .project import ProjectError
 
@@ -51,7 +52,7 @@ def make_handler(app: App):
         def _api(self, fn, arg=None):
             try:
                 self._json(fn(arg))
-            except (sync.SyncError, ProjectError, ClaudeError) as e:
+            except (sync.SyncError, ProjectError, ClaudeError, gitops.GitError, ghauth.GhError) as e:
                 self._json({"error": str(e)}, HTTPStatus.CONFLICT)
             except (KeyError, ValueError) as e:
                 self._json({"error": f"不正な要求: {e}"}, HTTPStatus.BAD_REQUEST)
@@ -91,6 +92,17 @@ def make_handler(app: App):
                 return self._send(200, data, ctype, extra=extra)
             if u.path == "/export":
                 return self._file(lambda: app.project(q).export(q.get("format", "zip")))
+            if u.path.startswith("/api/git/") and u.path[9:] in gitops.GET:   # Git の画面（原稿か本体のリポジトリ）
+                return self._api(gitops.GET[u.path[9:]], q)
+            if u.path.startswith("/api/git/") and u.path[9:] in gitview.GET:  # Git の画面の編集履歴
+                return self._api(gitview.GET[u.path[9:]], q)
+            if u.path == "/api/gitpdf":   # 編集履歴で見る、過去の版の PDF
+                try:
+                    return self._send(200, gitview.pdf_file(q).read_bytes(), "application/pdf")
+                except gitops.GitError as e:
+                    return self._json({"error": str(e)}, 409)
+            if u.path.startswith("/api/gh/") and u.path[8:] in ghauth.GET:     # GitHub との連携（gh）
+                return self._api(ghauth.GET[u.path[8:]], q)
             if u.path == "/api/item_zip":   # 一覧の項目の ⋮ → ダウンロード
                 return self._file(lambda: app.item_zip(q))
             routes = {"/api/info": app.info, "/api/status": app.status, "/api/browse": app.browse, "/api/fs_list": app.fs_list}
@@ -136,6 +148,19 @@ def make_handler(app: App):
                 body = json.loads(self._body() or b"{}")
             except json.JSONDecodeError:
                 return self._json({"error": "JSON が壊れている"}, 400)
+            if u.path.startswith("/api/git/") and u.path[9:] in gitops.POST:
+                return self._api(gitops.POST[u.path[9:]], body)
+            if u.path.startswith("/api/git/") and u.path[9:] in gitview.POST:
+                return self._api(gitview.POST[u.path[9:]], body)
+            if u.path.startswith("/api/gh/") and u.path[8:] in ghauth.POST:
+                return self._api(ghauth.POST[u.path[8:]], body)
+            if u.path == "/api/open_url":   # GitHub のログインの画面（github.com/login/device）をブラウザで開く
+                return self._api(lambda b: {"opened": launcher.open_tab(b["url"])} if str(b.get("url", "")).startswith(
+                    "https://github.com/login/device") else {"opened": False}, body)
+            if u.path == "/api/open_web":   # 今の画面をふつうのブラウザのタブで開く（close ならアプリのウィンドウを閉じる）
+                return self._api(lambda b: open_web(b, httpd_port[0]), body)
+            if u.path == "/api/open_app":   # 今の画面をアプリのウィンドウで開く
+                return self._api(lambda b: {"app": launcher.open_window(_local_url(b, httpd_port[0], app=True))}, body)
             if u.path == "/api/close":
                 return self._api(app.close_tex, q)
             if u.path == "/api/rename_project":
@@ -170,6 +195,26 @@ def make_handler(app: App):
     return Handler
 
 
+httpd_port = [0]   # 起動したポート（open_web が URL を組み立てるのに使う）
+
+
+def _local_url(body: dict, port: int, app: bool = False) -> str:
+    """画面から渡された場所（?p= ?dir= など）を、このサーバの URL にする。外のサイトは開かない。"""
+    q = str(body.get("search", ""))
+    q = q if q.startswith("?") or not q else "?" + q
+    if app:
+        q += ("&" if q else "?") + "app=1"
+    return f"http://127.0.0.1:{port}/{q}"
+
+
+def open_web(body: dict, port: int) -> dict:
+    ok = launcher.open_tab(_local_url(body, port))
+    if body.get("close") and ok:
+        launcher.detach()   # 端末から起動したときも、ウィンドウを閉じたらサーバを終える…のをやめる
+        threading.Timer(0.8, launcher.close_windows).start()
+    return {"opened": ok}
+
+
 def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: bool, app_window: bool = False) -> None:
     """app_window なら、アプリのウィンドウ（専用のブラウザ）で開き、Ctrl+C でウィンドウも閉じる。
     ウィンドウを閉じたら、サーバも終える（アプリと同じ）。"""
@@ -184,6 +229,8 @@ def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: boo
     if httpd is None:
         raise SystemExit(f"ポート {port}〜{port + 19} が全部使用中")
     app.port = httpd.server_port
+    httpd_port[0] = httpd.server_port
+    gitops.DATA = app.data.resolve()   # Git の画面（原稿）が扱う場所
     launcher.write_server(httpd.server_port, data)   # アプリの一覧から開くとき、動いているサーバを使う
     url = f"http://127.0.0.1:{httpd.server_port}/"
     if tex:

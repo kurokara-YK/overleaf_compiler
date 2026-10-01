@@ -18,7 +18,11 @@ import { runAct } from "./actions.mjs";
 import "./theme.mjs";
 import "./visual.mjs";
 import "./zoom.mjs";
+import "./gitpage.mjs";
+import "./appmode.mjs";
 import "./toolbar.mjs";
+import "./figtab.mjs";
+import "./pagefit.mjs";
 import { openHistory, closeHistory } from "./histpage.mjs";
 import { setBrowsePath, showHomeAt } from "./home.mjs";
 

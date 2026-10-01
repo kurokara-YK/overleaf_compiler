@@ -4,6 +4,7 @@
 #   1. TeX Live を ~/texlive/<年> に入れる（既に latexmk があれば飛ばす）
 #   2. 追加の TeX パッケージを入れる（足りないものだけ）
 #   3. pandoc を ~/.local/bin に入れる（Word・Markdown・HTML への書き出しに使う。既にあれば飛ばす）
+#      gh（GitHub CLI）も ~/.local/bin に入れる（Git の画面で GitHub にログインするのに使う）
 #   4. overleaf-compiler コマンドを ~/.local/bin に作る
 #   5. ~/.bashrc に TeX Live の PATH を足す（既にあれば飛ばす）
 #   6. アプリの一覧に登録する（--no-launcher で登録しない）

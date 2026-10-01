@@ -11,6 +11,7 @@ export let scale = null;          // 1pt が何 px か
 export let version = -1;          // 表示している PDF の版（サーバの組版の回数）
 export let rendering = false;
 export let pageSizes = [];        // 各ページの大きさ（pt）
+export let pdfDoc = null;          // 表示している PDF（pagefit.mjs が最後のページの埋まり具合を測る）
 let pendingReload = false, zoomMode = "fit", zoomRatio = 1;
 export function setVersion(v) { version = v; }
 // 原稿を閉じた・開き直した
@@ -21,6 +22,7 @@ export async function loadPdf() {
   rendering = true;
   try {
     const doc = await pdfjs.getDocument({ url: url(`/pdf?v=${version}&n=${Date.now()}`), ...PDFJS_OPTS }).promise;
+    pdfDoc = doc;
     const sizes = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const v = (await doc.getPage(i)).getViewport({ scale: 1 });

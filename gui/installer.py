@@ -87,6 +87,7 @@ class OptionsPage(QWizardPage):
         for key, label, note in (
             ("texlive", "TeX Live を入れる", "LaTeX を組むのに必要です（~/texlive に入れる。1.5 GB ほど）"),
             ("pandoc", "pandoc を入れる", "Word・Markdown・HTML への書き出しに使います"),
+            ("gh", "gh（GitHub CLI）を入れる", "Git の画面で GitHub にログインして、原稿や本体を自分の GitHub に上げるのに使います"),
             ("command", "端末のコマンドを作る", "端末で  overleaf-compiler  と打つと開けます（今までどおり）"),
             ("launcher", "アプリの一覧に追加する", "アプリの一覧やドックから開けます。右クリックでサーバーを止める・設定を開く"),
             ("pin", "ドックにピン留めする", "画面の下（横）のアプリの並びに、いつも置いておきます"),
@@ -112,7 +113,7 @@ class OptionsPage(QWizardPage):
 
     def initializePage(self) -> None:
         s = install.status()
-        for key, have in (("texlive", s["latexmk"]), ("pandoc", s["pandoc"])):
+        for key, have in (("texlive", s["latexmk"]), ("pandoc", s["pandoc"]), ("gh", s["gh"])):
             if have:   # 入っているものは選べなくして、入っていることを見せる
                 self.cb[key].setChecked(True)
                 self.cb[key].setEnabled(False)
