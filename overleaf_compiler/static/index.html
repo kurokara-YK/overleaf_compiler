@@ -35,7 +35,7 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <button class="ghost any-mode" id="gitBtn" title="overleaf-compiler（このツール）の Git：コミット・push・取り込み">⎇ Git</button>
   <button class="ghost any-mode" id="webBtn" title="開き方を変える"></button>
   <span class="seg editor-only" id="layout" title="レイアウト">
-    <button data-l="editor">エディタ</button><button data-l="both" class="on">両方</button><button data-l="pdf">PDF</button>
+    <button data-l="editor">エディタ</button><button data-l="both" class="on">両方</button><button data-l="pdf" id="layoutPdf">PDF</button><button id="layoutFmt" title="右のプレビューの形式（PDF・Word・Markdown・HTML）">▾</button>
   </span>
   <button class="editor-only" id="claudeBtn" title="右に Claude Code のチャット欄を出す／隠す（Ctrl+Shift+L）">✳ Claude</button>
   <button class="editor-only" id="codexBtn" title="右に Codex のチャット欄を出す／隠す"><img src="/claude-asset/codex-logo.svg" alt="">Codex</button>
@@ -116,6 +116,12 @@ try { const t = localStorage.getItem("oc.theme") || "system";
   <div class="mi" data-act="shortcuts">キーボードショートカット</div>
   <div class="mi" data-act="about">この画面について</div>
 </div>
+<div class="menu" id="mPview">
+  <div class="mi" data-act="pview:pdf">PDF<span class="k">組んだ PDF</span></div>
+  <div class="mi" data-act="pview:docx">Word（.docx）<span class="k">直接書き換えられる</span></div>
+  <div class="mi" data-act="pview:md">Markdown（.md）<span class="k">直接書き換えられる</span></div>
+  <div class="mi" data-act="pview:html">HTML（.html）<span class="k">直接書き換えられる</span></div>
+</div>
 <div class="menu" id="mWeb">
   <div class="mi app-only" data-act="web:open">🌐 Web で開く<span class="k">このウィンドウはそのまま</span></div>
   <div class="mi app-only" data-act="web:close">⏏ アプリを閉じて Web で開く</div>
@@ -151,6 +157,7 @@ try { const t = localStorage.getItem("oc.theme") || "system";
     <div class="row">
       <input id="newName" placeholder="新しいフォルダの名前" autocomplete="off">
       <button id="newBtn">フォルダを作る</button>
+      <button id="ghCloneBtn" title="GitHub のリポジトリ（招待されたものなど）をこのフォルダに取り込む">⤓ GitHub から取り込む<span id="ghInvBadge" class="badge warn" hidden></span></button>
     </div>
     <div id="homeMsg" class="msgline"></div>
     <input id="q" placeholder="絞り込む（下の階層まで探す。フォルダ名・原稿名・主文書の名前）" autocomplete="off" style="width:100%;margin-bottom:12px">
@@ -255,6 +262,8 @@ try { const t = localStorage.getItem("oc.theme") || "system";
       <button id="logBtn" title="ログとエラー">ログ <span class="n">0</span></button>
       <a class="btn" id="dlPdf" href="/pdf?download=1" title="PDF をダウンロード">⤓</a>
       <span id="compileInfo"></span>
+      <span id="altInfo" class="alt-only"></span>
+      <a class="btn alt-only" id="altDl" title="この形式でダウンロード">⤓</a>
       <span class="sp"></span>
       <input id="pageNo" value="1" title="ページ"><span class="kbd" id="pageCount">/ 0</span>
       <button id="zout" title="縮小（Ctrl+ホイールでも変えられる）">−</button>
@@ -266,6 +275,7 @@ try { const t = localStorage.getItem("oc.theme") || "system";
       </select>
     </div>
     <div id="viewer"><div id="pages"></div><div id="empty">コンパイル中…</div></div>
+    <div id="altview"><div id="altbody"></div></div>
   </section>
   <div class="vgrip" id="claudeGrip" title="ドラッグで幅を変える"></div>
   <!-- 右のチャット欄（Claude Code と Codex。それぞれ VS Code の拡張と同じ並び）。中身は js/claude/、サーバ側は claude.py と codex.py -->
@@ -316,7 +326,8 @@ try { const t = localStorage.getItem("oc.theme") || "system";
     <span class="gp-f"><span class="lab">アカウント</span><select id="gpAccount" title="どの GitHub のアカウントで上げるか"></select>
       <button id="gpLogin" title="GitHub にログインする（デバイスコード）">GitHub にログイン</button>
       <button id="gpLogout" class="ghost" title="このアカウントとの連携をやめる">連携をやめる</button></span>
-    <span class="gp-f"><span class="lab" id="gpRepoLab">リポジトリ</span><button id="gpRepoBtn" title="上げる先のリポジトリを選ぶ・作る">選ぶ…</button><span id="gpVis" class="badge"></span></span>
+    <span class="gp-f"><span class="lab" id="gpRepoLab">リポジトリ</span><button id="gpRepoBtn" title="上げる先のリポジトリを選ぶ・作る">選ぶ…</button><span id="gpVis" class="badge"></span>
+      <button id="gpCollab" title="このリポジトリを一緒に直す人を招待する・一覧を見る">👥 共同編集者</button></span>
     <span class="gp-f"><span class="lab">ブランチ</span><select id="gpBranch" title="ブランチ"></select>
       <button id="gpNewBranch" title="今の状態から新しいブランチを作る">＋</button></span>
   </div>

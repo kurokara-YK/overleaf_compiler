@@ -10,6 +10,7 @@ import os
 import mimetypes
 import signal
 import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -18,7 +19,7 @@ from urllib.parse import parse_qs, quote, urlparse
 from . import sync
 from .app import App
 from . import claude, launcher
-from . import ghauth, gitops, gitview
+from . import ghauth, gitops, gitview, pandoc
 from .claude import ClaudeError
 from .project import ProjectError
 
@@ -82,6 +83,17 @@ def make_handler(app: App):
                 extra = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(pdf.name)}"} \
                     if q.get("download") else None
                 return self._send(200, pdf.read_bytes(), "application/pdf", extra=extra)
+            if u.path == "/api/wordpdf":   # 右のプレビューの Word（.docx をページに組んだもの）
+                try:
+                    return self._send(200, pandoc.word_pdf(app.project(q).tex).read_bytes(), "application/pdf")
+                except (sync.SyncError, ProjectError) as e:
+                    return self._json({"error": str(e)}, 409)
+            if u.path == "/api/wordpage":   # Word の見え方の1ページの絵
+                try:
+                    png = pandoc.word_page(app.project(q).tex, int(q.get("page", 1)), int(q.get("w", 1200)))
+                    return self._send(200, png.read_bytes(), "image/png")
+                except (sync.SyncError, ProjectError, ValueError) as e:
+                    return self._json({"error": str(e)}, 409)
             if u.path == "/raw":
                 try:
                     data, ctype = app.project(q).raw(q.get("path", ""))
@@ -113,7 +125,7 @@ def make_handler(app: App):
                    "/api/goto_source": "goto_source", "/api/goto_pdf": "goto_pdf",
                    "/api/wordcount": "wordcount", "/api/history": "history_list",
                    "/api/history_diff": "history_diff", "/api/history_view": "history_view",
-                   "/api/comments": "comments_list"}
+                   "/api/comments": "comments_list", "/api/preview": "preview"}
             if u.path in per:
                 return self._api(lambda arg: getattr(app.project(q), per[u.path])(arg), q)
             # 右のチャット欄。?c= のタブの会話（chats.py）。新しい出来事が出るまで待って返す
@@ -144,6 +156,9 @@ def make_handler(app: App):
             if u.path == "/api/upload":
                 data = self._body()
                 return self._api(lambda _: app.project(q).upload(q, data))
+            if u.path in ("/api/hello", "/api/bye"):   # 画面が開いている・閉じた（sendBeacon でも来る）
+                self._body()
+                return self._json((page_hello if u.path == "/api/hello" else page_bye)(q.get("t", "")))
             try:
                 body = json.loads(self._body() or b"{}")
             except json.JSONDecodeError:
@@ -173,7 +188,7 @@ def make_handler(app: App):
             # 原稿ごとの要求（?p= の原稿の Project が処理する）
             per = {"/api/write": "write", "/api/recompile": "recompile", "/api/newfile": "newfile",
                    "/api/newfolder": "newfolder", "/api/rename": "rename_file", "/api/delete": "delete",
-                   "/api/replace": "replace", "/api/history_restore": "history_restore", "/api/comment": "comment",
+                   "/api/replace": "replace", "/api/text_replace": "text_replace", "/api/history_restore": "history_restore", "/api/comment": "comment",
                    "/api/history_label": "history_label", "/api/copy": "copy_project"}
             if u.path in per:
                 return self._api(lambda arg: getattr(app.project(q), per[u.path])(arg), body)
@@ -215,7 +230,52 @@ def open_web(body: dict, port: int) -> dict:
     return {"opened": ok}
 
 
-def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: bool, app_window: bool = False) -> None:
+# ---- 開いている画面（アプリのウィンドウ・Web のタブ）----
+# 画面は開いている間 20 秒ごとに /api/hello を送り、閉じるときに /api/bye を送る（life.mjs）。
+# アプリとして動いているサーバは、画面が全部閉じたら止まる（再読み込みで止まらないよう、少し待つ）
+PAGES: dict[str, float] = {}
+_pages_lock = threading.Lock()
+PAGE_TIMEOUT = 150   # 知らせが途切れた画面を閉じたとみなす秒数（裏のタブはブラウザが 1 分に 1 回まで間引く）
+STOP_GRACE = 8       # 画面が 0 になってから止めるまでの秒数
+
+
+def page_hello(t: str) -> dict:
+    if t:
+        with _pages_lock:
+            PAGES[t[:64]] = time.time()
+    return {"ok": True}
+
+
+def page_bye(t: str) -> dict:
+    with _pages_lock:
+        PAGES.pop(t[:64], None)
+    return {"ok": True}
+
+
+def _auto_stop(stop) -> None:
+    """画面が1つでも開いたあと、全部閉じたら stop を呼ぶ（裏で起こしただけで、まだ誰も開いていない間は止めない）。"""
+    def run():
+        seen, empty_since = False, None
+        while True:
+            time.sleep(2)
+            now = time.time()
+            with _pages_lock:
+                for k in [k for k, v in PAGES.items() if now - v > PAGE_TIMEOUT]:
+                    PAGES.pop(k)
+                live = len(PAGES)
+            if live:
+                seen, empty_since = True, None
+            elif seen:
+                empty_since = empty_since or now
+                if now - empty_since >= STOP_GRACE:
+                    print("overleaf-compiler: 画面が全部閉じたので終了する", flush=True)
+                    stop()
+                    return
+    threading.Thread(target=run, daemon=True).start()
+
+
+def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: bool, app_window: bool = False,
+          auto_stop: bool = False) -> None:
     """app_window なら、アプリのウィンドウ（専用のブラウザ）で開き、Ctrl+C でウィンドウも閉じる。
     ウィンドウを閉じたら、サーバも終える（アプリと同じ）。"""
     app = App(data, start=start)
@@ -242,8 +302,8 @@ def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: boo
     windowed = False
     if open_browser and app_window:
         windowed = launcher.open_window(url)
-        if windowed:   # ウィンドウを閉じたら、サーバも終える（serve_forever から抜けて、下の finally へ）
-            launcher.watch_window(httpd.shutdown)
+    if windowed or auto_stop:   # 画面（ウィンドウ・Web のタブ）を全部閉じたら、サーバも終える（下の finally へ）
+        _auto_stop(httpd.shutdown)
     elif open_browser:
         threading.Timer(0.5, lambda: launcher.open_tab(url)).start()
     print(f"overleaf-compiler: http://127.0.0.1:{httpd.server_port}/   "
@@ -257,6 +317,7 @@ def serve(data: Path, start: str, tex: Path | None, port: int, open_browser: boo
     finally:
         if windowed:
             launcher.close_windows()
+        app.shutdown()   # 組版（latexmk）を残さない
         launcher.clear_server()
         app.shutdown()
         httpd.server_close()

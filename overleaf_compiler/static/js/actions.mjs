@@ -18,6 +18,7 @@ import { openMenu } from "./menu.mjs";
 import { homeItemAct } from "./home.mjs";
 import { webAct } from "./appmode.mjs";
 import { info } from "./state.mjs";
+import { setPreviewFmt } from "./altview.mjs";
 
 // 原稿のメニュー（ヘッダの原稿名）。Overleaf のプロジェクト名のメニューと同じ
 $("ptitle").onclick = (e) => { e.stopPropagation(); const r = $("ptitle").getBoundingClientRect(); openMenu("mProject", r.left, r.bottom + 4); };
@@ -92,6 +93,7 @@ export async function runAct(a) {
     case "search": return openSearch();
     case "save": return saveAll();
     case "layout": return setLayout(v);
+    case "pview": return setPreviewFmt(v);
     case "theme": return setTheme(v);
     case "edmode": return setEdMode(v);
     case "toggleSide": return toggleSide();

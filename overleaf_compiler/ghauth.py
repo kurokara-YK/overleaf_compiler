@@ -296,8 +296,88 @@ def user_info(user: str) -> dict:
     return json.loads(_gh("api", "user", user=user))
 
 
-GET = {"accounts": accounts, "owners": owners, "repos": repos, "branches": branches}
+# ---- 共同編集者（持ち主の側）と、届いた招待（相手の側）----
+_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
+
+
+def collaborators(q: dict) -> dict:
+    """参加している人と、招待中の人。"""
+    user, full = _repo(q)
+    people = json.loads(_gh("api", f"repos/{full}/collaborators?affiliation=direct&per_page=100", user=user))
+    invites = json.loads(_gh("api", f"repos/{full}/invitations?per_page=100", user=user))
+    perm = lambda p: "編集できる" if p in ("write", "push", "admin", "maintain") or (isinstance(p, dict) and p.get("push")) else "見るだけ"
+    return {"people": [{"login": u["login"], "avatar": u.get("avatar_url", ""), "perm": perm(u.get("permissions") or {}),
+                        "admin": bool((u.get("permissions") or {}).get("admin"))} for u in people],
+            "invites": [{"id": i["id"], "login": (i.get("invitee") or {}).get("login", ""), "avatar": (i.get("invitee") or {}).get("avatar_url", ""),
+                         "perm": perm(i.get("permissions")), "created": i.get("created_at", "")} for i in invites],
+            "invite_url": f"https://github.com/{full}/invitations"}
+
+
+def find_users(q: dict) -> dict:
+    """GitHub のユーザーを名前で探す（招待する相手を選ぶ）。"""
+    user, name = q.get("user", ""), str(q.get("q", "")).strip()
+    if not name:
+        return {"users": []}
+    out = []
+    if _LOGIN.fullmatch(name):   # ちょうどその名前の人を先に
+        try:
+            u = json.loads(_gh("api", f"users/{name}", user=user))
+            out.append({"login": u["login"], "name": u.get("name") or "", "avatar": u.get("avatar_url", "")})
+        except GhError:
+            pass
+    try:
+        r = json.loads(_gh("api", "-X", "GET", "search/users", "-f", f"q={name} in:login", "-f", "per_page=8", user=user))
+        out += [{"login": u["login"], "name": "", "avatar": u.get("avatar_url", "")} for u in r.get("items", [])
+                if u["login"].lower() not in {x["login"].lower() for x in out}]
+    except GhError:
+        pass
+    return {"users": out[:8]}
+
+
+def collab_invite(body: dict) -> dict:
+    user, full = _repo(body)
+    who = str(body.get("login", "")).strip().lstrip("@")
+    if not _LOGIN.fullmatch(who):
+        raise GhError("GitHub のユーザー名が正しくない")
+    if who.lower() == user.lower():
+        raise GhError("自分は招待できない")
+    perm = "push" if body.get("perm", "push") == "push" else "pull"
+    _gh("api", "-X", "PUT", f"repos/{full}/collaborators/{who}", "-f", f"permission={perm}", user=user)
+    return collaborators({"user": user, "repo": full})
+
+
+def collab_remove(body: dict) -> dict:
+    """参加している人を外す。招待中なら招待を取り消す。"""
+    user, full = _repo(body)
+    if body.get("invite_id"):
+        _gh("api", "-X", "DELETE", f"repos/{full}/invitations/{int(body['invite_id'])}", user=user)
+    else:
+        who = str(body.get("login", ""))
+        if not _LOGIN.fullmatch(who):
+            raise GhError("GitHub のユーザー名が正しくない")
+        _gh("api", "-X", "DELETE", f"repos/{full}/collaborators/{who}", user=user)
+    return collaborators({"user": user, "repo": full})
+
+
+def invitations(q: dict) -> dict:
+    """自分に届いている、リポジトリへの招待。"""
+    user = q.get("user", "")
+    r = json.loads(_gh("api", "user/repository_invitations?per_page=100", user=user))
+    return {"invites": [{"id": i["id"], "repo": i["repository"]["full_name"], "private": i["repository"].get("private", True),
+                         "from": (i.get("inviter") or {}).get("login", ""), "created": i.get("created_at", ""),
+                         "description": i["repository"].get("description") or ""} for i in r]}
+
+
+def invitation_answer(body: dict) -> dict:
+    user, iid = body.get("user", ""), int(body.get("id", 0))
+    _gh("api", "-X", "PATCH" if body.get("accept", True) else "DELETE", f"user/repository_invitations/{iid}", user=user)
+    return invitations({"user": user})
+
+
+GET = {"accounts": accounts, "owners": owners, "repos": repos, "branches": branches,
+       "collaborators": collaborators, "users": find_users, "invitations": invitations}
 GET["repo"] = repo_info
 POST = {"install": install_gh, "login": login_start, "refresh": refresh_start, "login_cancel": login_cancel,
         "logout": logout, "create": create_repo, "update": repo_update, "branch_create": branch_create,
-        "branch_rename": branch_rename, "branch_delete": branch_delete, "delete": repo_delete}
+        "branch_rename": branch_rename, "branch_delete": branch_delete, "delete": repo_delete,
+        "invite": collab_invite, "uninvite": collab_remove, "answer": invitation_answer}

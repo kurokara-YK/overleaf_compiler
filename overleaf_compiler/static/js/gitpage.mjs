@@ -141,6 +141,7 @@ async function renderTarget() {
   $("gpRepoBtn").textContent = st?.remote ? `${st.remote} ▾` : "選ぶ…";
   $("gpVis").textContent = st?.remote ? (st.private ? "非公開" : "公開") : "";
   $("gpVis").className = "badge" + (st?.remote && !st.private ? " warn" : "");
+  $("gpCollab").style.display = st?.remote ? "" : "none";
 }
 $("gpAccount").onchange = () => { if (st?.remote) connect({ account: $("gpAccount").value, repo: st.remote, branch: st.target, private: st.private }); };
 $("gpLogin").onclick = async () => {
@@ -155,7 +156,7 @@ $("gpLogin").onclick = async () => {
   line("GitHub と連携した。アプリを閉じても覚えている", "ok");
 };
 // デバイスコードの手続き（ログイン・権限の追加）。許可されたら true
-async function deviceFlow(endpoint, body, title, note = "") {
+export async function deviceFlow(endpoint, body, title, note = "") {
   let r;
   try { r = await post(endpoint, body); } catch (e) { line(e.message, "err"); return false; }
   if (!r.code) { line(r.error || "始められなかった", "err"); return false; }
@@ -419,6 +420,8 @@ async function repoSettings(user, full) {
       <h4>名前</h4><div class="gp-row"><code>${escapeHtml(full)}</code><span class="gp-grow"></span><button data-act="rename">名前を変える</button></div>
       <h4>公開範囲</h4><div class="gp-row"><span class="badge${info.private ? "" : " warn"}">${info.private ? "非公開" : "公開"}</span>
         <span class="gp-grow"></span><button data-act="vis">${info.private ? "公開にする" : "非公開にする"}</button></div>
+      <h4>共同編集者</h4><div class="gp-row"><span class="kbd">一緒に直す人を GitHub のユーザー名で招待する</span><span class="gp-grow"></span>
+        <button data-act="collab" class="primary">👥 共同編集者…</button></div>
       <h4>ブランチ</h4><div class="gp-branches">${info.branches.map((b) => `<div class="gp-row"><span>${escapeHtml(b)}</span>
           ${b === info.default_branch ? '<span class="badge">既定</span>' : ""}<span class="gp-grow"></span>
           ${b === info.default_branch ? "" : `<button data-act="default" data-b="${escapeHtml(b)}">既定にする</button>`}
@@ -429,7 +432,7 @@ async function repoSettings(user, full) {
       <div class="gp-danger"><h4>危険な操作</h4><div class="gp-row"><div><b>このリポジトリを削除</b><div class="kbd">一度消すと元に戻せない。慎重に</div></div>
         <span class="gp-grow"></span><button data-act="delete" class="danger">このリポジトリを削除</button></div></div></div>`,
       [{ label: "閉じる", value: null }]);
-    if (!admin) $("mBody").querySelectorAll("button[data-act]").forEach((b) => { b.disabled = true; });
+    if (!admin) $("mBody").querySelectorAll("button[data-act]:not([data-act=collab])").forEach((b) => { b.disabled = true; });
     $("mBody").onclick = (e) => {
       const b = e.target.closest("button[data-act]");
       if (b && !b.disabled) { act = { k: b.dataset.act, b: b.dataset.b }; document.querySelector("#mFoot button").click(); }
@@ -444,6 +447,7 @@ async function repoSettings(user, full) {
 const isMine = (full) => st?.remote === full;   // 今のフォルダ（本体）の送り先か
 async function repoAct(user, full, info, { k, b }) {
   const owner = full.split("/")[0], name = full.split("/")[1];
+  if (k === "collab") { await collabDialog(user, full, info.can_admin); return full; }
   if (k === "rename") {
     const nn = await ask("リポジトリの名前を変える", "新しい名前（英数字と - _ .）。古い URL からも、しばらくは GitHub が案内してくれる", name);
     if (!nn || nn === name) return full;
@@ -553,4 +557,76 @@ function renderOp() {
     try { const r = await gpost("abort"); await refresh(r); line(`${r.aborted}をやめて元に戻した`, "ok"); }
     catch (e) { line(e.message, "err"); }
   };
+}
+
+// 送り先のリポジトリの横の「👥 共同編集者」
+$("gpCollab").onclick = async () => {
+  const user = $("gpAccount").value;
+  if (!st?.remote || !user) return;
+  let admin = false;
+  try { admin = (await api(`/api/gh/repo?user=${enc(user)}&repo=${enc(st.remote)}`)).can_admin; } catch (e) { return line(e.message, "err"); }
+  collabDialog(user, st.remote, admin);
+};
+// ---- 共同編集者（招待する・招待中・参加している人・外す）----
+// 窓の中で操作が完結する（窓を閉じずに一覧を描き直す）
+async function collabDialog(user, full, admin) {
+  const p = modal(`${full} の共同編集者`, `<div class="gp-collab">
+      ${admin ? `<div class="kbd">相手の GitHub のユーザー名で招待する。相手は overleaf-compiler の一覧の「⤓ GitHub から取り込む」で参加して取り込める
+        （GitHub からのメールや通知からでも参加できる）。非公開のリポジトリは、招待された人しか見られない</div>
+      <div class="gp-row" style="margin-top:8px"><input id="gcQ" placeholder="GitHub のユーザー名" autocomplete="off" spellcheck="false" style="flex:1">
+        <select id="gcPerm"><option value="push">編集できる</option><option value="pull">見るだけ</option></select>
+        <button id="gcInvite" class="primary" style="flex:none">招待する</button></div>
+      <div id="gcFound" class="gc-found"></div>`
+      : '<div class="kbd" style="color:var(--warn)">このアカウントには管理の権限が無いので、見るだけ（招待はリポジトリの持ち主がする）</div>'}
+      <h4>参加している人</h4><div id="gcPeople" class="gc-list"><div class="dim">読み込み中…</div></div>
+      <h4>招待中（まだ参加していない）</h4><div id="gcInvites" class="gc-list"></div>
+      <div class="gp-row" style="margin-top:10px"><span class="kbd">アプリを使わない人には、GitHub の招待のページを送る</span><span class="gp-grow"></span>
+        <button id="gcCopy" style="flex:none">招待のページの URL をコピー</button></div></div>`,
+    [{ label: "閉じる", value: null }]);
+  let data = null;
+  const av = (u) => u.avatar ? `<img src="${escapeHtml(u.avatar)}&s=40" alt="">` : "";
+  const draw = () => {
+    $("gcPeople").innerHTML = data.people.map((u) => `<div class="gc-it">${av(u)}<b>${escapeHtml(u.login)}</b>
+        <span class="badge">${u.admin ? "持ち主・管理" : u.perm}</span><span class="gp-grow"></span>
+        ${admin && !u.admin && u.login !== user ? `<button data-rm="${escapeHtml(u.login)}" class="danger">外す</button>` : ""}</div>`).join("") || '<div class="dim">いない</div>';
+    $("gcInvites").innerHTML = data.invites.map((i) => `<div class="gc-it">${av(i)}<b>${escapeHtml(i.login)}</b>
+        <span class="badge warn">${i.perm}・招待中</span><span class="dim">${i.created ? ago(Date.parse(i.created) / 1000) : ""}</span><span class="gp-grow"></span>
+        ${admin ? `<button data-cancel="${i.id}">招待を取り消す</button>` : ""}</div>`).join("") || '<div class="dim">いない</div>';
+  };
+  const load = async (r) => { try { data = r || await api(`/api/gh/collaborators?user=${enc(user)}&repo=${enc(full)}`); draw(); } catch (e) { $("gcPeople").innerHTML = `<div class="dim">${escapeHtml(e.message)}</div>`; } };
+  load();
+  $("gcCopy").onclick = () => navigator.clipboard.writeText(`https://github.com/${full}/invitations`).then(() => showToast("コピーした", "ok", 1500));
+  if (admin) {
+    let timer = null;
+    $("gcQ").oninput = () => {   // 名前で探して、候補から選べる
+      clearTimeout(timer);
+      const q = $("gcQ").value.trim();
+      if (q.length < 2) { $("gcFound").innerHTML = ""; return; }
+      timer = setTimeout(async () => {
+        try {
+          const r = await api(`/api/gh/users?user=${enc(user)}&q=${enc(q)}`);
+          $("gcFound").innerHTML = r.users.map((u) => `<div class="gc-it pick" data-login="${escapeHtml(u.login)}">${av(u)}<b>${escapeHtml(u.login)}</b> <span class="dim">${escapeHtml(u.name)}</span></div>`).join("");
+        } catch {}
+      }, 350);
+    };
+    $("gcFound").onclick = (e) => { const it = e.target.closest("[data-login]"); if (it) { $("gcQ").value = it.dataset.login; $("gcFound").innerHTML = ""; } };
+    $("gcInvite").onclick = async () => {
+      const login = $("gcQ").value.trim().replace(/^@/, "");
+      if (!login) return $("gcQ").focus();
+      $("gcInvite").disabled = true;
+      try { await load(await post("/api/gh/invite", { user, repo: full, login, perm: $("gcPerm").value })); $("gcQ").value = ""; $("gcFound").innerHTML = "";
+            showToast(`${escapeHtml(login)} を招待した`, "ok", 3000); }
+      catch (e) { showToast(escapeHtml(e.message), "err", 6000); }
+      finally { $("gcInvite").disabled = false; }
+    };
+  }
+  $("mBody").onclick = async (e) => {
+    const b = e.target.closest("button[data-rm], button[data-cancel]"); if (!b) return;
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "本当に？ もう一度押す"; return; }   // 窓を重ねられないので、2回押して確かめる
+    b.disabled = true;
+    try { await load(await post("/api/gh/uninvite", { user, repo: full, login: b.dataset.rm || "", invite_id: b.dataset.cancel || "" })); }
+    catch (er) { showToast(escapeHtml(er.message), "err", 6000); b.disabled = false; }
+  };
+  await p;
+  $("mBody").onclick = null;
 }

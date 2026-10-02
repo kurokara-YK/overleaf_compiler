@@ -71,7 +71,7 @@ def start_server(port: int = 8765) -> dict:
     STATE.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "PYTHONPATH": str(REPO) + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else "")}
     with LOG.open("a") as log:
-        subprocess.Popen([sys.executable, "-m", "overleaf_compiler", "serve", "--no-browser", "--port", str(port)],
+        subprocess.Popen([sys.executable, "-m", "overleaf_compiler", "serve", "--no-browser", "--auto-stop", "--port", str(port)],
                          cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                          start_new_session=True)
     for _ in range(100):

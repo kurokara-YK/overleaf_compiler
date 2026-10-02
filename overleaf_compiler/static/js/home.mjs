@@ -10,6 +10,7 @@ let browsePath = new URLSearchParams(location.search).get("dir"), entries = [];
 let found = null;      // 絞り込みの結果（下の階層まで探したもの）。null なら絞り込んでいない
 let menuItem = null;   // ⋮ を押した項目
 export function setBrowsePath(p) { browsePath = p; }
+export const browseDir = () => browsePath || "";
 
 // ---- パンくず ----
 function crumbHtml(parts, lastBold) {

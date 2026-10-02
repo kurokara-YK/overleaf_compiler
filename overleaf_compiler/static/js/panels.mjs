@@ -43,7 +43,7 @@ export function setLayout(l) {
 export const pdfOnly = () => ide.classList.contains("only-pdf");
 // ソースへ移るとき、PDF だけの表示ならエディタも出す
 export function revealEditor() { if (ide.classList.contains("only-pdf")) setLayout("both"); }
-$("layout").onclick = (e) => { const b = e.target.closest("button"); if (b) setLayout(b.dataset.l); };
+$("layout").onclick = (e) => { const b = e.target.closest("button[data-l]"); if (b) setLayout(b.dataset.l); };
 
 // ---- 境目のドラッグで幅を変える（次回も同じ）----
 $("side").style.width = `${store.get("oc.sideW", 250)}px`;

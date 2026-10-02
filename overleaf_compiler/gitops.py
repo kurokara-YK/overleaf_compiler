@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -263,6 +264,45 @@ def connect(body: dict) -> dict:
         except (ghauth.GhError, KeyError):
             pass
     return status(body)
+
+
+def clone(body: dict) -> dict:
+    """GitHub のリポジトリを data の下に取り込む（共同編集者として参加したものなど）。送り先も最初から決めておく。"""
+    if DATA is None:
+        raise GitError("data の場所が分からない")
+    user, full = str(body.get("account", "")), str(body.get("repo", ""))
+    if not user or not re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", full):
+        raise GitError("アカウントとリポジトリを選ぶ")
+    parent = str(body.get("parent", "")).strip("/")
+    name = str(body.get("name") or full.split("/")[1]).strip()
+    if not name or "/" in name or name.startswith("."):
+        raise GitError("フォルダの名前が正しくない")
+    dest = (DATA / parent / name).resolve()
+    if DATA.resolve() not in dest.parents:
+        raise GitError("data の外には取り込めない")
+    if dest.exists():
+        raise GitError(f"{(Path(parent) / name).as_posix()} はもうある。別の名前にする")
+    try:
+        tok = ghauth.token(user)
+    except ghauth.GhError as e:
+        raise GitError(str(e))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, "OC_GH_TOKEN": tok, "GIT_TERMINAL_PROMPT": "0"}
+    helper = 'credential.helper=!f() { echo username=x-access-token; echo "password=$OC_GH_TOKEN"; }; f'
+    r = subprocess.run(["git", "-c", "credential.helper=", "-c", helper, "clone", f"https://github.com/{full}.git", str(dest)],
+                       capture_output=True, text=True, timeout=600, env=env)
+    if r.returncode:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise GitError((r.stderr or r.stdout).strip()[:800] or "取り込めなかった")
+    rel = str(dest.relative_to(DATA.resolve()))
+    c = Ctx({"mode": "data", "dir": rel})
+    branch = c.git("branch", "--show-current").strip() or "main"
+    try:
+        private = json.loads(ghauth._gh("api", f"repos/{full}", user=user)).get("private", True)
+    except (ghauth.GhError, ValueError):
+        private = True
+    connect({"mode": "data", "dir": rel, "account": user, "repo": full, "branch": branch, "private": private})
+    return {"dir": rel, "branch": branch, "empty": not c.git("rev-parse", "--verify", "-q", "HEAD", check=False).strip()}
 
 
 def disconnect(body: dict) -> dict:
@@ -576,4 +616,4 @@ def engines(_=None) -> dict:
 GET = {"status": status, "branches": local_branches, "diff": diff, "private": get_private, "engines": engines,
        "outgoing": outgoing, "folders": folders, "last_commit": last_commit}
 POST = {"init": init, "connect": connect, "disconnect": disconnect, "checkout": checkout, "fetch": fetch,
-        "pull": pull, "commit": commit, "undo": undo, "abort": abort, "push": push, "generate": generate, "private": set_private}
+        "pull": pull, "clone": clone, "commit": commit, "undo": undo, "abort": abort, "push": push, "generate": generate, "private": set_private}

@@ -309,3 +309,12 @@ body.git #menubar, body.git .editor-only { display: none !important; }
 #ghExport { font-size: 12.5px; padding: 3px 10px; }
 #pageFit { cursor: pointer; white-space: nowrap; } #pageFit:hover { text-decoration: underline; }
 #pageFit.ok { color: var(--ok); } #pageFit.warn { color: var(--warn); } #pageFit.err { color: var(--err); font-weight: 600; }
+/* 共同編集者・GitHub から取り込む */
+.gp-collab h4, .gi h4 { margin: 14px 0 6px; font-size: 13px; color: var(--bright); }
+.gc-list { max-height: 26vh; overflow: auto; }
+.gc-it { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.gc-it img { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+.gc-it button { flex: none; font-size: 12px; padding: 2px 10px; }
+.gc-found .gc-it.pick { cursor: pointer; } .gc-found .gc-it.pick:hover { background: var(--hover); }
+.gp-collab .gp-row select, .gi .gp-row select { flex: none; }
+#ghInvBadge { margin-left: 6px; }

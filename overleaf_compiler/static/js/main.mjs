@@ -23,6 +23,9 @@ import "./appmode.mjs";
 import "./toolbar.mjs";
 import "./figtab.mjs";
 import "./pagefit.mjs";
+import "./ghimport.mjs";
+import "./altview.mjs";
+import "./life.mjs";
 import { openHistory, closeHistory } from "./histpage.mjs";
 import { setBrowsePath, showHomeAt } from "./home.mjs";
 

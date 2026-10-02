@@ -132,7 +132,7 @@ def cmd_serve(a) -> None:
         return
     if tex:
         print(f"組版: {_engine_note(tex)}")
-    serve(data, start, tex, a.port, not a.no_browser, app_window=not a.web)
+    serve(data, start, tex, a.port, not a.no_browser, app_window=not a.web, auto_stop=a.auto_stop)
 
 
 def cmd_check(a) -> None:
@@ -246,6 +246,7 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--no-browser", action="store_true", help="ブラウザを自動で開かない")
     s.add_argument("--web", action="store_true", help="アプリのウィンドウではなく、ブラウザのタブで開く")
+    s.add_argument("--auto-stop", action="store_true", help="開いた画面が全部閉じたら終える（アプリから起こしたとき）")
     s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("comments", help="PDF に付いたコメントを出す・解決済みにする")
     s.add_argument("path", nargs="?", default=".")

@@ -175,6 +175,48 @@ class Project:
         self.watcher.poke()
         return {"path": self._rel(src), **r}
 
+    # ---- 右のプレビューを Word・Markdown・HTML にしたとき ----
+    def preview(self, q: dict) -> dict:
+        return pandoc.preview(self.tex, q.get("format", "html"))
+
+    def text_replace(self, body: dict) -> dict:
+        """プレビュー（Word・Markdown・HTML）で書き換えた文字を、ソースでも書き換える。
+
+        old の前後の文字（before・after）も合わせて原稿の .tex から探す（空白・改行・全角半角の違いは無視）。
+        主文書を先に、ほかの .tex をあとに探し、最初に見つかったところを直す。old が空なら、そこに new を足す。
+        """
+        old, new = str(body.get("old", "")), str(body.get("new", ""))
+        before, after = str(body.get("before", "")), str(body.get("after", ""))
+        files = [self.tex] + sorted(f for f in self._proj().rglob("*.tex") if f != self.tex and ".git" not in f.parts)
+        nb, no = len(sync._squeeze(before)[0]), len(sync._squeeze(old)[0])
+        for ctx in ((before, after), (before[-4:], after[:4]), ("", "")):
+            b, a = ctx
+            if not sync._squeeze(b + old + a)[0] or (not no and not (b or a)):
+                continue
+            nb = len(sync._squeeze(b)[0])
+            for f in files:
+                try:
+                    f = sync.inside(f, self.root)
+                    cur = sync.read_file(f, self.root)
+                except (sync.SyncError, OSError):
+                    continue
+                text = cur["text"]
+                comp, idx = sync._squeeze(text)
+                q = sync._squeeze(b + old + a)[0]
+                h = comp.find(q)
+                if h < 0 or comp.find(q, h + 1) >= 0 and ctx != (before, after):
+                    continue   # 見つからない、または前後を縮めたら何か所にもある
+                if no:
+                    s0, e0 = idx[h + nb], idx[h + nb + no - 1] + 1
+                else:   # 足しただけ：前の文字の直後（前が無ければ後の文字の直前）
+                    s0 = e0 = idx[h + nb - 1] + 1 if nb else idx[h]
+                new_src = sync._SPECIAL.sub(r"\\\1", new)
+                r = sync.write_file(f, text[:s0] + new_src + text[e0:], cur["mtime"], self.root)
+                self._record(f, "browser")
+                self.watcher.poke()
+                return {"path": self._rel(f), "line": text.count("\n", 0, s0) + 1, "mtime": r["mtime"]}
+        raise sync.SyncError("NOT_FOUND")
+
     def settle(self) -> dict:
         """呼ばれた時点までの変更を組み終えるまで待って状態を返す。待っている間にリコンパイルしたら、やり直した方を待つ。"""
         while True:
